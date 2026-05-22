@@ -322,6 +322,7 @@
       <button class="tab-btn active" data-panel="overview">Overview</button>
       <button class="tab-btn" data-panel="mc">Monte Carlo</button>
       <button class="tab-btn" data-panel="sensitivity">Entry Sensitivity</button>
+      <button class="tab-btn" data-panel="optimizer">🔍 Optimizer</button>
     </div>
 
     <div id="panels">
@@ -463,6 +464,78 @@
         </div>
       </div><!-- /sensitivity -->
 
+      <!-- Optimizer panel -->
+      <div class="panel" id="panel-optimizer">
+        <div class="info-box">
+          Grids <b>7 fund sizes</b> ($75M–$250M) × <b>7 portfolio sizes</b> (10–70 companies)
+          = 49 configurations. Check range auto-derives from avg check size so each cell
+          is self-consistent. Score&nbsp;=&nbsp;0.6×Median&nbsp;IRR&nbsp;+&nbsp;0.4×P10&nbsp;IRR
+          (risk-adjusted return). Uses current <b>entry valuation</b> and <b>market scenario</b>
+          from the sidebar. Simulations per cell&nbsp;=&nbsp;MC&nbsp;sims&nbsp;÷&nbsp;3
+          (min&nbsp;50).
+        </div>
+        <button class="run-btn" id="run-optimizer-btn">🔍 Run Portfolio Optimizer</button>
+
+        <!-- Optimal config card -->
+        <div id="opt-best-card" style="display:none; margin-bottom:1.25rem;">
+          <div class="metric-card" style="border-left:4px solid red; max-width:700px;">
+            <div class="card-title" style="color:red;">★ Optimal Configuration</div>
+            <div class="metric-group" style="flex-wrap:wrap; gap:1.5rem;">
+              <div class="metric-item">
+                <div class="value" id="opt-fund-size">—</div>
+                <div class="label">Fund size</div>
+              </div>
+              <div class="metric-item">
+                <div class="value" id="opt-n-inv">—</div>
+                <div class="label"># investments</div>
+              </div>
+              <div class="metric-item">
+                <div class="value green" id="opt-avg-check">—</div>
+                <div class="label">Avg check</div>
+              </div>
+              <div class="metric-item">
+                <div class="value" id="opt-irr-med">—</div>
+                <div class="label">Median IRR</div>
+              </div>
+              <div class="metric-item">
+                <div class="value" id="opt-irr-p10">—</div>
+                <div class="label">P10 IRR</div>
+              </div>
+              <div class="metric-item">
+                <div class="value purple" id="opt-score">—</div>
+                <div class="label">Risk-adj score</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-wrap" id="opt-heatmap-wrap" style="display:none">
+          <div class="chart-overlay hidden" id="opt-heatmap-loading">
+            <div class="spinner"></div>Running optimizer…
+          </div>
+          <img id="opt-heatmap-img" alt="Optimizer heatmaps">
+        </div>
+
+        <div class="chart-wrap" id="opt-pareto-wrap" style="display:none">
+          <img id="opt-pareto-img" alt="Pareto frontier">
+        </div>
+
+        <div id="opt-table-wrap" style="display:none; margin-top:0.5rem;">
+          <div class="table-wrap">
+            <table id="opt-table">
+              <thead>
+                <tr>
+                  <th>Fund ($M)</th><th># Cos</th><th>Avg Check ($M)</th>
+                  <th>Median IRR</th><th>P10 IRR</th>
+                  <th>Median DPI</th><th>Score</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- /optimizer -->
+
     </div><!-- /panels -->
   </div><!-- /content -->
 </div><!-- /app -->
@@ -586,6 +659,12 @@ $('run-sensitivity-btn').addEventListener('click', () => {
   triggerRun('sensitivity');
 });
 
+// ── Run optimizer button ──────────────────────────────────────────────────────
+$('run-optimizer-btn').addEventListener('click', () => {
+  if (!isReady) return;
+  triggerRun('optimizer');
+});
+
 // ── Core run logic ────────────────────────────────────────────────────────────
 function triggerRun(tab) {
   if (!isReady) return;
@@ -605,6 +684,8 @@ async function _doRun(tab) {
       await runMC(p);
     } else if (tab === 'sensitivity') {
       await runSensitivity(p);
+    } else if (tab === 'optimizer') {
+      await runOptimizer(p);
     }
   } catch (e) {
     console.error(e);
@@ -737,6 +818,64 @@ function renderTable(tableId, rows, cols) {
     }).join('');
     tbody.appendChild(tr);
   });
+}
+
+// ── Optimizer ─────────────────────────────────────────────────────────────────
+async function runOptimizer(p) {
+  $('run-optimizer-btn').disabled = true;
+  $('opt-best-card').style.display    = 'none';
+  $('opt-heatmap-wrap').style.display = 'block';
+  $('opt-pareto-wrap').style.display  = 'none';
+  $('opt-table-wrap').style.display   = 'none';
+  showOverlay('opt-heatmap-loading', true);
+  $('opt-heatmap-img').style.opacity  = '0';
+  await tick();
+
+  const fn    = pyodide.globals.get('get_optimizer');
+  const nSimsOpt = Math.max(50, Math.floor(p.nSims / 3));
+  const raw   = fn(p.sEntry, p.sResPct, p.bucketsKey, nSimsOpt);
+  const d     = JSON.parse(raw);
+
+  // Optimal config card
+  const b = d.best;
+  $('opt-fund-size').textContent  = `$${b.fund_size}M`;
+  $('opt-n-inv').textContent      = `${b.n_inv} cos`;
+  $('opt-avg-check').textContent  = `$${b.avg_check}M`;
+  $('opt-irr-med').textContent    = `${b.irr_median}%`;
+  $('opt-irr-p10').textContent    = `${b.irr_p10}%`;
+  $('opt-score').textContent      = b.score.toFixed(1);
+  $('opt-best-card').style.display = 'block';
+
+  // Heatmaps
+  $('opt-heatmap-img').src = `data:image/png;base64,${d.heatmap}`;
+  $('opt-heatmap-img').style.opacity = '1';
+  showOverlay('opt-heatmap-loading', false);
+
+  // Pareto / scatter
+  $('opt-pareto-img').src = `data:image/png;base64,${d.pareto}`;
+  $('opt-pareto-wrap').style.display = 'block';
+
+  // Results table — sorted by score descending
+  const sorted = [...d.results].sort((a, b) => b.score - a.score);
+  const tbody  = document.querySelector('#opt-table tbody');
+  tbody.innerHTML = '';
+  sorted.forEach((r, idx) => {
+    const isBest = (r.fund_size === b.fund_size && r.n_inv === b.n_inv);
+    const tr = document.createElement('tr');
+    if (isBest) tr.style.background = '#fff3e0';
+    tr.innerHTML =
+      `<td>${isBest ? '★ ' : ''}<b>$${r.fund_size}M</b></td>` +
+      `<td>${r.n_inv}</td>` +
+      `<td>$${r.avg_check}M</td>` +
+      `<td>${r.irr_median}%</td>` +
+      `<td>${r.irr_p10}%</td>` +
+      `<td>${r.dpi_median}x</td>` +
+      `<td><b>${r.score}</b></td>`;
+    tbody.appendChild(tr);
+  });
+  $('opt-table-wrap').style.display = 'block';
+
+  $('run-optimizer-btn').disabled = false;
 }
 
 // Allow the browser to repaint before we block the thread with Python

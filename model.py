@@ -566,4 +566,194 @@ def get_sensitivity(s_fund_size, s_n_inv, s_reserve_pct, s_chk_min, s_chk_max,
     return json.dumps({'chart': chart_b64, 'table': table})
 
 
-print('VC Fund Model loaded. Functions available: get_overview, get_mc, get_sensitivity')
+def _plot_optimizer_heatmaps(irr_mat, p10_mat, score_mat,
+                              x_labels, y_labels, best_ri, best_ci):
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    specs = [
+        (irr_mat,   'Median Gross IRR (%)',                     'YlGn',   axes[0], '.1f', '%'),
+        (p10_mat,   'P10 Gross IRR (%)  ← downside',           'RdYlGn', axes[1], '.1f', '%'),
+        (score_mat, 'Risk-Adj Score\n(0.6×Median + 0.4×P10)',  'Blues',  axes[2], '.1f', ''),
+    ]
+    for mat, title, cmap, ax, fmt, suffix in specs:
+        masked = np.ma.masked_invalid(mat)
+        im     = ax.imshow(masked, cmap=cmap, aspect='auto')
+
+        ax.set_xticks(np.arange(-0.5, mat.shape[1], 1), minor=True)
+        ax.set_yticks(np.arange(-0.5, mat.shape[0], 1), minor=True)
+        ax.grid(which='minor', color='white', linewidth=2)
+        ax.tick_params(which='minor', size=0)
+
+        ax.set_xticks(range(len(x_labels))); ax.set_xticklabels(x_labels, fontsize=9)
+        ax.set_yticks(range(len(y_labels))); ax.set_yticklabels(y_labels, fontsize=9)
+        ax.set_xlabel('Fund Size', fontsize=9)
+        ax.set_ylabel('# Investments', fontsize=9)
+        ax.set_title(title, fontweight='bold', fontsize=10, pad=8)
+
+        vmin = float(np.nanmin(mat)); vmax = float(np.nanmax(mat))
+        for i in range(mat.shape[0]):
+            for j in range(mat.shape[1]):
+                v = mat[i, j]
+                if np.isnan(v):
+                    continue
+                norm = (v - vmin) / (vmax - vmin) if vmax > vmin else 0.5
+                text_color = 'white' if norm > 0.60 else '#222'
+                ax.text(j, i, f'{v:{fmt[1:]}}{suffix}',
+                        ha='center', va='center', fontsize=8.5, color=text_color)
+
+        rect = plt.Rectangle((best_ci - 0.5, best_ri - 0.5), 1, 1,
+                              linewidth=3, edgecolor='red', facecolor='none', zorder=6)
+        ax.add_patch(rect)
+        plt.colorbar(im, ax=ax, shrink=0.85)
+
+    plt.suptitle(
+        'Portfolio Optimizer — Fund Size × # Investments\n'
+        '(red border = highest risk-adjusted score)',
+        fontsize=12, fontweight='bold')
+    plt.tight_layout()
+    return _fig_to_b64(fig)
+
+
+def _plot_pareto(rows, best, fund_sizes):
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
+
+    fs_unique  = sorted(set(r['fund_size'] for r in rows))
+    colors     = plt.cm.viridis(np.linspace(0.1, 0.9, len(fs_unique)))
+    color_map  = dict(zip(fs_unique, colors))
+
+    for r in rows:
+        is_best = (r['fund_size'] == best['fund_size'] and r['n_inv'] == best['n_inv'])
+        ax1.scatter(r['irr_p10'], r['irr_median'],
+                    s=200 if is_best else 70,
+                    color=color_map[r['fund_size']],
+                    marker='*' if is_best else 'o',
+                    edgecolors='red' if is_best else 'none',
+                    linewidths=1.5, zorder=10 if is_best else 5)
+        if is_best:
+            ax1.annotate(
+                f"  ★ ${r['fund_size']}M / {r['n_inv']} cos\n  avg ${r['avg_check']}M check",
+                (r['irr_p10'], r['irr_median']), fontsize=8.5, color='red')
+
+    for fs, color in color_map.items():
+        ax1.scatter([], [], color=color, label=f'${fs}M', s=50)
+    ax1.legend(title='Fund size', fontsize=8, title_fontsize=8, loc='lower right')
+    ax1.set_xlabel('P10 Gross IRR (%)  ← downside risk')
+    ax1.set_ylabel('Median Gross IRR (%)')
+    ax1.set_title('Risk / Return Scatter\n(upper-right = better)', fontweight='bold')
+    ax1.axvline(0, color='#9e9e9e', linewidth=0.7, linestyle=':')
+
+    avg_checks = [r['avg_check'] for r in rows]
+    scores     = [r['score']     for r in rows]
+    n_invs     = [r['n_inv']     for r in rows]
+    sc = ax2.scatter(avg_checks, scores, c=n_invs, cmap='plasma', s=70, alpha=0.85)
+    plt.colorbar(sc, ax=ax2, label='# investments')
+    best_ac = best['avg_check']; best_sc = best['score']
+    ax2.scatter(best_ac, best_sc, s=220, marker='*', color='red', zorder=10, label='Optimal')
+    ax2.set_xlabel('Avg Initial Check Size ($M)')
+    ax2.set_ylabel('Risk-Adjusted Score')
+    ax2.set_title('Score vs Avg Check Size\n(colored by # investments)', fontweight='bold')
+    ax2.legend(fontsize=8)
+
+    plt.suptitle('Portfolio Construction Optimizer', fontsize=12, fontweight='bold')
+    plt.tight_layout()
+    return _fig_to_b64(fig)
+
+
+def get_optimizer(entry_val, reserve_pct, buckets_key, n_sims):
+    """Grid search over fund_size × n_investments.
+
+    Check range is derived from avg_check (min = 0.5×, max = 2×) so the
+    construction is self-consistent as the grid varies.
+    Score = 0.6 × median_irr + 0.4 × P10_irr  (risk-adjusted return).
+    Returns JSON with best config, full results table, and two charts.
+    """
+    FUND_SIZES = [75, 100, 125, 150, 175, 200, 250]
+    N_INV_LIST = [10, 15, 20, 27, 35, 50, 70]
+
+    bkts     = BASE_BUCKETS if buckets_key == 'base' else BEAR_BUCKETS
+    n_sims   = int(n_sims)
+    res_frac = int(reserve_pct) / 100.0
+
+    rows = []
+    for fund_size in FUND_SIZES:
+        for n_inv in N_INV_LIST:
+            deployed  = fund_size * 0.90
+            init_cap  = deployed * (1 - res_frac)
+            avg_check = init_cap / n_inv
+            chk_min   = max(0.1, avg_check * 0.5)
+            chk_max   = avg_check * 2.0
+
+            cfg = FundConfig(
+                name=f'{fund_size}M/{n_inv}',
+                fund_size_m=float(fund_size), vintage_year=2026,
+                entry_post_money_m=float(entry_val),
+                dilution_per_round=0.22, deployment_rate=0.90,
+                num_investments=n_inv, reserve_ratio=res_frac,
+                check_min_m=chk_min, check_max_m=chk_max,
+                follow_on_pct=0.15, outcome_buckets=bkts,
+                avg_hold_yrs=7.0, std_hold_yrs=1.5,
+            )
+            dep    = cfg.fund_size_m * cfg.deployment_rate
+            undep  = cfg.fund_size_m * (1 - cfg.deployment_rate)
+            irr_list = []; dpi_list = []; moic_list = []
+
+            for s in range(n_sims):
+                port  = simulate_portfolio(cfg, seed=s)
+                cf    = build_cashflows(cfg, port)
+                gross = cf['gross_proceeds'].sum() - undep
+                total = gross + undep
+                gcf   = (-cf['invested'] + (cf['gross_proceeds'] - cf['undeployed_returned'])).values
+                irr_list.append(calc_irr(gcf) * 100)
+                dpi_list.append(total / cfg.fund_size_m)
+                moic_list.append(gross / dep if dep > 0 else np.nan)
+
+            irr_arr  = np.array(irr_list, dtype=float)
+            irr_med  = float(np.nanmedian(irr_arr))
+            irr_p10  = float(np.nanpercentile(irr_arr, 10))
+            dpi_med  = float(np.nanmedian(dpi_list))
+            moic_med = float(np.nanmedian(moic_list))
+            score    = 0.6 * irr_med + 0.4 * irr_p10
+
+            rows.append({
+                'fund_size':   fund_size,
+                'n_inv':       n_inv,
+                'avg_check':   round(avg_check, 2),
+                'irr_median':  round(irr_med, 1),
+                'irr_p10':     round(irr_p10, 1),
+                'dpi_median':  round(dpi_med, 2),
+                'moic_median': round(moic_med, 2),
+                'score':       round(score, 1),
+            })
+
+    best = max(rows, key=lambda r: r['score'])
+
+    # Build matrices for heatmaps (rows = n_inv, cols = fund_size)
+    n_r = len(N_INV_LIST); n_c = len(FUND_SIZES)
+    irr_mat   = np.full((n_r, n_c), np.nan)
+    p10_mat   = np.full((n_r, n_c), np.nan)
+    score_mat = np.full((n_r, n_c), np.nan)
+
+    for r in rows:
+        ri = N_INV_LIST.index(r['n_inv'])
+        ci = FUND_SIZES.index(r['fund_size'])
+        irr_mat[ri, ci]   = r['irr_median']
+        p10_mat[ri, ci]   = r['irr_p10']
+        score_mat[ri, ci] = r['score']
+
+    x_labels = [f'${f}M' for f in FUND_SIZES]
+    y_labels = [f'{n}' for n in N_INV_LIST]
+    best_ri  = N_INV_LIST.index(best['n_inv'])
+    best_ci  = FUND_SIZES.index(best['fund_size'])
+
+    heatmap_b64 = _plot_optimizer_heatmaps(
+        irr_mat, p10_mat, score_mat, x_labels, y_labels, best_ri, best_ci)
+    pareto_b64  = _plot_pareto(rows, best, FUND_SIZES)
+
+    return json.dumps({
+        'best':    best,
+        'results': rows,
+        'heatmap': heatmap_b64,
+        'pareto':  pareto_b64,
+    })
+
+
+print('VC Fund Model loaded. Functions available: get_overview, get_mc, get_sensitivity, get_optimizer')

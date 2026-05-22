@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VC Fund Model — AI-Focused, 2026</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    color: #212121;
+    background: #f0f2f5;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Loading screen ─────────────────────────────────────────────────────── */
+  #loading-screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: #1a237e;
+    color: white; z-index: 1000;
+  }
+  #loading-screen h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem; }
+  #loading-screen p  { opacity: 0.7; margin-bottom: 2rem; }
+  #loading-msg { font-size: 0.9rem; opacity: 0.85; margin-top: 1rem; }
+  .progress-bar {
+    width: 320px; height: 6px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 3px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; background: #64b5f6;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+
+  /* ── Main layout ────────────────────────────────────────────────────────── */
+  #app {
+    display: none;
+    height: 100vh;
+    flex-direction: row;
+  }
+  #app.visible { display: flex; }
+
+  /* ── Sidebar ────────────────────────────────────────────────────────────── */
+  #sidebar {
+    width: 260px; min-width: 260px;
+    background: #1a237e;
+    color: white;
+    padding: 1.2rem 1rem;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  #sidebar h1 {
+    font-size: 1.05rem; font-weight: 700;
+    margin-bottom: 0.2rem; letter-spacing: 0.02em;
+  }
+  #sidebar .subtitle { font-size: 0.75rem; opacity: 0.6; margin-bottom: 1.2rem; }
+  .section-label {
+    font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; opacity: 0.6;
+    margin: 1.2rem 0 0.6rem;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    padding-top: 1rem;
+  }
+  .section-label:first-of-type { margin-top: 0.2rem; border-top: none; padding-top: 0; }
+  .control { margin-bottom: 0.85rem; }
+  .control label {
+    display: flex; justify-content: space-between;
+    font-size: 0.78rem; margin-bottom: 0.3rem;
+  }
+  .control label span { opacity: 0.85; font-weight: 600; }
+  input[type=range] {
+    width: 100%; height: 4px;
+    -webkit-appearance: none;
+    background: rgba(255,255,255,0.25);
+    border-radius: 2px; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    background: #64b5f6;
+    border-radius: 50%;
+  }
+  .param-hint {
+    font-size: 0.72rem; opacity: 0.55;
+    margin-top: 0.8rem; line-height: 1.5;
+  }
+  .param-hint b { opacity: 0.9; }
+  .radio-group { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.4rem; }
+  .radio-group label {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-size: 0.78rem; cursor: pointer;
+  }
+  .radio-group input[type=radio] { accent-color: #64b5f6; }
+
+  /* ── Main content ───────────────────────────────────────────────────────── */
+  #content {
+    flex: 1; display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  #topbar {
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0.8rem 1.5rem;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  #topbar h2 { font-size: 1rem; font-weight: 700; color: #1a237e; }
+  #topbar-sub { font-size: 0.75rem; color: #757575; margin-top: 0.1rem; }
+
+  /* ── Tabs ───────────────────────────────────────────────────────────────── */
+  #tabs {
+    background: white;
+    border-bottom: 2px solid #e8eaf6;
+    padding: 0 1.5rem;
+    display: flex; gap: 0;
+  }
+  .tab-btn {
+    padding: 0.65rem 1.2rem;
+    font-size: 0.82rem; font-weight: 600;
+    color: #757575; background: none; border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .tab-btn:hover { color: #1a237e; }
+  .tab-btn.active { color: #1a237e; border-bottom-color: #1a237e; }
+
+  /* ── Tab panels ─────────────────────────────────────────────────────────── */
+  #panels { flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── Metric cards ───────────────────────────────────────────────────────── */
+  .metric-row { display: flex; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+  .metric-card {
+    background: white; border-radius: 8px;
+    padding: 1rem 1.2rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    flex: 1; min-width: 160px;
+  }
+  .metric-card .card-title {
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #757575;
+    margin-bottom: 0.5rem;
+  }
+  .metric-group { display: flex; gap: 1.5rem; margin-bottom: 0.25rem; }
+  .metric-item .value {
+    font-size: 1.4rem; font-weight: 700; line-height: 1;
+    color: #1a237e;
+  }
+  .metric-item .value.green  { color: #2e7d32; }
+  .metric-item .value.purple { color: #6a1b9a; }
+  .metric-item .label { font-size: 0.7rem; color: #9e9e9e; margin-top: 0.2rem; }
+  .metric-card .sub { font-size: 0.7rem; color: #9e9e9e; margin-top: 0.5rem; }
+
+  /* ── Chart area ─────────────────────────────────────────────────────────── */
+  .chart-wrap {
+    background: white; border-radius: 8px;
+    padding: 1rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    margin-bottom: 1.25rem;
+    position: relative;
+  }
+  .chart-wrap img { width: 100%; height: auto; display: block; border-radius: 4px; }
+  .chart-overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.85);
+    border-radius: 8px; font-size: 0.85rem;
+    color: #555; gap: 0.6rem;
+  }
+  .chart-overlay.hidden { display: none; }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 3px solid #e8eaf6;
+    border-top-color: #1a237e;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Percentile banners ─────────────────────────────────────────────────── */
+  .stat-row { display: flex; gap: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+  .stat-pill {
+    background: white; border-radius: 6px;
+    padding: 0.5rem 0.9rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    flex: 1; min-width: 100px; text-align: center;
+  }
+  .stat-pill .s-val { font-size: 1.1rem; font-weight: 700; color: #1a237e; }
+  .stat-pill .s-lbl { font-size: 0.68rem; color: #9e9e9e; }
+
+  /* ── Tables ─────────────────────────────────────────────────────────────── */
+  .table-wrap {
+    background: white; border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    overflow: auto; margin-bottom: 1.25rem;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  thead { background: #e8eaf6; }
+  th { padding: 0.55rem 0.9rem; text-align: left; font-weight: 700;
+       font-size: 0.72rem; letter-spacing: 0.04em; color: #1a237e; }
+  td { padding: 0.5rem 0.9rem; border-top: 1px solid #f5f5f5; }
+  tr:last-child td { border-bottom: none; }
+  .two-col { display: flex; gap: 1rem; margin-bottom: 1.25rem; }
+  .two-col > div { flex: 1; }
+
+  /* ── Run button ─────────────────────────────────────────────────────────── */
+  .run-btn {
+    padding: 0.55rem 1.4rem;
+    background: #1a237e; color: white;
+    border: none; border-radius: 6px;
+    font-size: 0.82rem; font-weight: 600;
+    cursor: pointer; transition: background 0.15s;
+    margin-bottom: 1rem;
+  }
+  .run-btn:hover { background: #283593; }
+  .run-btn:disabled { background: #9e9e9e; cursor: not-allowed; }
+  .info-box {
+    background: #e3f2fd; border-left: 3px solid #1565c0;
+    padding: 0.6rem 0.9rem; border-radius: 4px;
+    font-size: 0.78rem; color: #1565c0;
+    margin-bottom: 1rem; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Loading Screen ──────────────────────────────────────────────────────── -->
+<div id="loading-screen">
+  <h1>📈 VC Fund Model</h1>
+  <p>AI-Focused · 2026 Vintage</p>
+  <div class="progress-bar">
+    <div class="progress-fill" id="progress" style="width:0%"></div>
+  </div>
+  <div id="loading-msg">Initialising Python runtime…</div>
+</div>
+
+<!-- ── App ────────────────────────────────────────────────────────────────── -->
+<div id="app">
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <h1>📈 VC Fund Model</h1>
+    <div class="subtitle">AI · 2026 · WebAssembly</div>
+
+    <div class="section-label">Seed Fund I</div>
+    <div class="control">
+      <label>Fund size <span id="lbl-s-size">$140M</span></label>
+      <input type="range" id="s-size" min="50" max="300" step="5" value="140">
+    </div>
+    <div class="control">
+      <label>Entry post-money <span id="lbl-s-entry">$27.5M</span></label>
+      <input type="range" id="s-entry" min="10" max="60" step="2.5" value="27.5">
+    </div>
+    <div class="control">
+      <label># investments <span id="lbl-s-ninv">27</span></label>
+      <input type="range" id="s-ninv" min="5" max="100" step="1" value="27">
+    </div>
+    <div class="control">
+      <label>Reserve ratio <span id="lbl-s-res">10%</span></label>
+      <input type="range" id="s-res" min="5" max="70" step="5" value="10">
+    </div>
+    <div class="control">
+      <label>Min check <span id="lbl-s-cmin">$2.0M</span></label>
+      <input type="range" id="s-cmin" min="0.25" max="5" step="0.25" value="2">
+    </div>
+    <div class="control">
+      <label>Max check <span id="lbl-s-cmax">$7.0M</span></label>
+      <input type="range" id="s-cmax" min="1" max="15" step="0.5" value="7">
+    </div>
+    <div class="param-hint" id="seed-hint"></div>
+
+    <div class="section-label">Growth Fund I</div>
+    <div class="control">
+      <label>Fund size <span id="lbl-g-size">$140M</span></label>
+      <input type="range" id="g-size" min="50" max="300" step="5" value="140">
+    </div>
+    <div class="control">
+      <label>Entry post-money <span id="lbl-g-entry">$78.7M</span></label>
+      <input type="range" id="g-entry" min="30" max="150" step="2.5" value="78.7">
+    </div>
+    <div class="control">
+      <label># investments <span id="lbl-g-ninv">22</span></label>
+      <input type="range" id="g-ninv" min="5" max="50" step="1" value="22">
+    </div>
+    <div class="control">
+      <label>Reserve ratio <span id="lbl-g-res">30%</span></label>
+      <input type="range" id="g-res" min="10" max="60" step="5" value="30">
+    </div>
+
+    <div class="section-label">Simulation</div>
+    <div class="control">
+      <label>MC simulations <span id="lbl-nsims">300</span></label>
+      <input type="range" id="nsims" min="100" max="1000" step="100" value="300">
+    </div>
+    <div style="font-size:0.75rem;opacity:0.6;margin-top:0.2rem;margin-bottom:0.8rem;">
+      Sensitivity uses ÷3 per data point.
+    </div>
+    <div class="radio-group">
+      <label><input type="radio" name="scenario" value="base" checked> Base case (17% loss rate)</label>
+      <label><input type="radio" name="scenario" value="bear"> Bear market (28% loss rate)</label>
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <div id="content">
+    <div id="topbar">
+      <div>
+        <h2 id="topbar-title">VC Fund Model — AI-Focused, 2026</h2>
+        <div id="topbar-sub"></div>
+      </div>
+    </div>
+
+    <div id="tabs">
+      <button class="tab-btn active" data-panel="overview">Overview</button>
+      <button class="tab-btn" data-panel="mc">Monte Carlo</button>
+      <button class="tab-btn" data-panel="sensitivity">Entry Sensitivity</button>
+    </div>
+
+    <div id="panels">
+
+      <!-- Overview panel -->
+      <div class="panel active" id="panel-overview">
+        <div class="metric-row">
+          <div class="metric-card">
+            <div class="card-title">Seed Fund I</div>
+            <div class="metric-group">
+              <div class="metric-item">
+                <div class="value" id="s-irr">—</div>
+                <div class="label">Gross IRR</div>
+              </div>
+              <div class="metric-item">
+                <div class="value green" id="s-moic">—</div>
+                <div class="label">Gross MOIC</div>
+              </div>
+              <div class="metric-item">
+                <div class="value green" id="s-dpi">—</div>
+                <div class="label">DPI</div>
+              </div>
+            </div>
+            <div class="sub" id="s-sub"></div>
+          </div>
+          <div class="metric-card">
+            <div class="card-title">Growth Fund I</div>
+            <div class="metric-group">
+              <div class="metric-item">
+                <div class="value" id="g-irr">—</div>
+                <div class="label">Gross IRR</div>
+              </div>
+              <div class="metric-item">
+                <div class="value green" id="g-moic">—</div>
+                <div class="label">Gross MOIC</div>
+              </div>
+              <div class="metric-item">
+                <div class="value green" id="g-dpi">—</div>
+                <div class="label">DPI</div>
+              </div>
+            </div>
+            <div class="sub" id="g-sub"></div>
+          </div>
+          <div class="metric-card">
+            <div class="card-title">Combined LP</div>
+            <div class="metric-group">
+              <div class="metric-item">
+                <div class="value purple" id="c-moic">—</div>
+                <div class="label">Combined MOIC</div>
+              </div>
+              <div class="metric-item">
+                <div class="value purple" id="c-proceeds">—</div>
+                <div class="label">Total Proceeds</div>
+              </div>
+            </div>
+            <div class="sub" id="c-sub"></div>
+          </div>
+        </div>
+
+        <div class="chart-wrap" id="jcurve-wrap">
+          <div class="chart-overlay" id="jcurve-loading">
+            <div class="spinner"></div>Running simulation…
+          </div>
+          <img id="jcurve-img" alt="J-Curve" style="display:none">
+        </div>
+
+        <div class="two-col">
+          <div>
+            <div class="table-wrap" id="seed-table-wrap">
+              <table id="seed-table">
+                <thead><tr><th>Outcome</th><th>n</th><th>Avg exit ($M)</th><th>Invested ($M)</th><th>Proceeds ($M)</th><th>MOIC</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <div class="table-wrap" id="growth-table-wrap">
+              <table id="growth-table">
+                <thead><tr><th>Source</th><th>n</th><th>Avg check ($M)</th><th>Invested ($M)</th><th>Proceeds ($M)</th><th>MOIC</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div><!-- /overview -->
+
+      <!-- Monte Carlo panel -->
+      <div class="panel" id="panel-mc">
+        <div class="info-box">
+          Monte Carlo runs automatically when you change any parameter. Results update in 3–8 seconds depending on simulation count.
+        </div>
+        <div class="stat-row" id="mc-stats">
+          <div class="stat-pill"><div class="s-val" id="mc-p10">—</div><div class="s-lbl">P10 IRR</div></div>
+          <div class="stat-pill"><div class="s-val" id="mc-p25">—</div><div class="s-lbl">P25 IRR</div></div>
+          <div class="stat-pill"><div class="s-val" id="mc-med">—</div><div class="s-lbl">Median IRR</div></div>
+          <div class="stat-pill"><div class="s-val" id="mc-p75">—</div><div class="s-lbl">P75 IRR</div></div>
+          <div class="stat-pill"><div class="s-val" id="mc-p90">—</div><div class="s-lbl">P90 IRR</div></div>
+          <div class="stat-pill"><div class="s-val" id="mc-pos">—</div><div class="s-lbl">% Positive</div></div>
+        </div>
+
+        <div class="chart-wrap" id="mc-wrap">
+          <div class="chart-overlay" id="mc-loading">
+            <div class="spinner"></div>Running Monte Carlo…
+          </div>
+          <img id="mc-img" alt="MC distributions" style="display:none">
+        </div>
+
+        <div class="table-wrap">
+          <table id="pct-table">
+            <thead><tr><th>Percentile</th><th>Gross IRR (%)</th><th>DPI (x)</th><th>Gross MOIC (x)</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div><!-- /mc -->
+
+      <!-- Sensitivity panel -->
+      <div class="panel" id="panel-sensitivity">
+        <div class="info-box">
+          Sweeps entry valuation $12M–$50M holding all other Seed Fund I parameters fixed.
+          Click <b>Run Sensitivity</b> to compute (~10–20 seconds).
+        </div>
+        <button class="run-btn" id="run-sensitivity-btn">▶ Run Entry Sensitivity</button>
+
+        <div class="chart-wrap" id="sens-wrap">
+          <div class="chart-overlay" id="sens-loading" style="display:none">
+            <div class="spinner"></div>Computing sensitivity sweep…
+          </div>
+          <img id="sens-img" alt="Entry sensitivity" style="display:none">
+          <div id="sens-placeholder" style="padding:3rem;text-align:center;color:#9e9e9e;font-size:0.85rem;">
+            Click "Run Entry Sensitivity" to generate chart.
+          </div>
+        </div>
+
+        <div class="table-wrap" id="sens-table-wrap" style="display:none">
+          <table id="sens-table">
+            <thead><tr><th>Entry ($M)</th><th>P10 IRR (%)</th><th>Median IRR (%)</th><th>P90 IRR (%)</th><th>Median DPI (x)</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div><!-- /sensitivity -->
+
+    </div><!-- /panels -->
+  </div><!-- /content -->
+</div><!-- /app -->
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let pyodide      = null;
+let isReady      = false;
+let isRunning    = false;
+let pendingRun   = null;   // which tab needs update
+let activeTab    = 'overview';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const fmt = (v, decimals=1) => (typeof v === 'number' ? v.toFixed(decimals) : '—');
+
+function setProgress(pct, msg) {
+  $('progress').style.width = pct + '%';
+  $('loading-msg').textContent = msg;
+}
+
+function showOverlay(id, show) {
+  $(id).classList.toggle('hidden', !show);
+}
+
+function getParams() {
+  const sSizeEl  = $('s-size'),  sEntryEl = $('s-entry');
+  const sNinvEl  = $('s-ninv'),  sResEl   = $('s-res');
+  const sCminEl  = $('s-cmin'),  sCmaxEl  = $('s-cmax');
+  const gSizeEl  = $('g-size'),  gEntryEl = $('g-entry');
+  const gNinvEl  = $('g-ninv'),  gResEl   = $('g-res');
+  const nsimsEl  = $('nsims');
+  const scenario = document.querySelector('input[name="scenario"]:checked').value;
+
+  let cmin = parseFloat(sCminEl.value);
+  let cmax = parseFloat(sCmaxEl.value);
+  if (cmin >= cmax) { cmax = cmin + 0.5; sCmaxEl.value = cmax; }
+
+  return {
+    sFundSize:  parseFloat(sSizeEl.value),
+    sEntry:     parseFloat(sEntryEl.value),
+    sNinv:      parseInt(sNinvEl.value),
+    sResPct:    parseInt(sResEl.value),
+    sChkMin:    cmin,
+    sChkMax:    cmax,
+    gFundSize:  parseFloat(gSizeEl.value),
+    gEntry:     parseFloat(gEntryEl.value),
+    gNinv:      parseInt(gNinvEl.value),
+    gResPct:    parseInt(gResEl.value),
+    nSims:      parseInt(nsimsEl.value),
+    bucketsKey: scenario,
+  };
+}
+
+function updateLabelsAndHint(p) {
+  $('lbl-s-size').textContent  = `$${p.sFundSize}M`;
+  $('lbl-s-entry').textContent = `$${p.sEntry}M`;
+  $('lbl-s-ninv').textContent  = p.sNinv;
+  $('lbl-s-res').textContent   = `${p.sResPct}%`;
+  $('lbl-s-cmin').textContent  = `$${p.sChkMin.toFixed(2)}M`;
+  $('lbl-s-cmax').textContent  = `$${p.sChkMax.toFixed(1)}M`;
+  $('lbl-g-size').textContent  = `$${p.gFundSize}M`;
+  $('lbl-g-entry').textContent = `$${p.gEntry}M`;
+  $('lbl-g-ninv').textContent  = p.gNinv;
+  $('lbl-g-res').textContent   = `${p.gResPct}%`;
+  $('lbl-nsims').textContent   = p.nSims;
+
+  // Derived stats (no Python needed)
+  const deployed    = p.sFundSize * 0.90;
+  const initialCap  = deployed * (1 - p.sResPct / 100);
+  const avgCheck    = initialCap / p.sNinv;
+  const initOwn     = avgCheck / p.sEntry * 100;
+  const reserveAmt  = deployed * p.sResPct / 100;
+  $('seed-hint').innerHTML =
+    `Avg check: <b>$${avgCheck.toFixed(2)}M</b><br>` +
+    `Initial ownership: <b>${initOwn.toFixed(1)}%</b><br>` +
+    `Reserve: <b>$${reserveAmt.toFixed(0)}M</b>`;
+
+  $('topbar-sub').textContent =
+    `Seed $${p.sFundSize}M · ${p.sNinv} cos · $${p.sEntry}M entry  |  ` +
+    `Growth $${p.gFundSize}M · ${p.gNinv} cos · $${p.gEntry}M entry  |  ` +
+    `${p.nSims} sims · ${p.bucketsKey === 'bear' ? 'Bear market' : 'Base case'}`;
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    activeTab = btn.dataset.panel;
+    $(`panel-${activeTab}`).classList.add('active');
+
+    // Auto-run MC when switching to that tab for the first time
+    if (activeTab === 'mc' && !$('mc-img').src) {
+      triggerRun('mc');
+    }
+  });
+});
+
+// ── Slider listeners ──────────────────────────────────────────────────────────
+let debounce = null;
+function onParamChange() {
+  const p = getParams();
+  updateLabelsAndHint(p);
+  clearTimeout(debounce);
+  debounce = setTimeout(() => triggerRun(activeTab), 450);
+}
+
+['s-size','s-entry','s-ninv','s-res','s-cmin','s-cmax',
+ 'g-size','g-entry','g-ninv','g-res','nsims'].forEach(id => {
+  $(id).addEventListener('input', onParamChange);
+});
+document.querySelectorAll('input[name="scenario"]').forEach(r => {
+  r.addEventListener('change', onParamChange);
+});
+
+// ── Run sensitivity button ────────────────────────────────────────────────────
+$('run-sensitivity-btn').addEventListener('click', () => {
+  if (!isReady) return;
+  triggerRun('sensitivity');
+});
+
+// ── Core run logic ────────────────────────────────────────────────────────────
+function triggerRun(tab) {
+  if (!isReady) return;
+  if (isRunning) { pendingRun = tab; return; }
+  _doRun(tab);
+}
+
+async function _doRun(tab) {
+  isRunning = true;
+  pendingRun = null;
+  const p = getParams();
+
+  try {
+    if (tab === 'overview') {
+      await runOverview(p);
+    } else if (tab === 'mc') {
+      await runMC(p);
+    } else if (tab === 'sensitivity') {
+      await runSensitivity(p);
+    }
+  } catch (e) {
+    console.error(e);
+  }
+
+  isRunning = false;
+  if (pendingRun) {
+    const next = pendingRun;
+    pendingRun = null;
+    _doRun(next);
+  }
+}
+
+// ── Overview ──────────────────────────────────────────────────────────────────
+async function runOverview(p) {
+  showOverlay('jcurve-loading', true);
+  $('jcurve-img').style.display = 'none';
+  await tick();
+
+  const fn = pyodide.globals.get('get_overview');
+  const raw = fn(
+    p.sFundSize, p.sEntry, p.sNinv, p.sResPct, p.sChkMin, p.sChkMax,
+    p.gFundSize, p.gEntry, p.gNinv, p.gResPct, p.bucketsKey
+  );
+  const d = JSON.parse(raw);
+
+  $('s-irr').textContent  = `${d.seed.gross_irr}%`;
+  $('s-moic').textContent = `${d.seed.gross_moic}x`;
+  $('s-dpi').textContent  = `${d.seed.dpi}x`;
+  $('s-sub').textContent  = `Avg check: $${(p.sFundSize*0.9*(1-p.sResPct/100)/p.sNinv).toFixed(2)}M`;
+
+  $('g-irr').textContent  = `${d.growth.gross_irr}%`;
+  $('g-moic').textContent = `${d.growth.gross_moic}x`;
+  $('g-dpi').textContent  = `${d.growth.gross_moic}x`;
+  $('g-sub').textContent  = `${d.growth.n_grad} graduates + ${d.growth.n_co} co-investments`;
+
+  $('c-moic').textContent    = `${d.combined.moic}x`;
+  $('c-proceeds').textContent = `$${d.combined.total_proceeds}M`;
+  $('c-sub').textContent     = `$${d.combined.total_committed}M committed · ${d.combined.n_writeoffs} write-offs`;
+
+  $('jcurve-img').src = `data:image/png;base64,${d.jcurve}`;
+  $('jcurve-img').style.display = 'block';
+  showOverlay('jcurve-loading', false);
+
+  renderTable('seed-table', d.seed_by_bucket,
+    ['outcome','n','avg_exit_m','invested','proceeds','moic']);
+  renderTable('growth-table', d.growth_by_source,
+    ['source','n','avg_check','invested','proceeds','moic']);
+}
+
+// ── Monte Carlo ───────────────────────────────────────────────────────────────
+async function runMC(p) {
+  showOverlay('mc-loading', true);
+  $('mc-img').style.display = 'none';
+  await tick();
+
+  const fn  = pyodide.globals.get('get_mc');
+  const raw = fn(
+    p.sFundSize, p.sEntry, p.sNinv, p.sResPct, p.sChkMin, p.sChkMax,
+    p.bucketsKey, p.nSims
+  );
+  const d = JSON.parse(raw);
+
+  $('mc-p10').textContent = `${d.stats.p10}%`;
+  $('mc-p25').textContent = `${d.stats.p25}%`;
+  $('mc-med').textContent = `${d.stats.median}%`;
+  $('mc-p75').textContent = `${d.stats.p75}%`;
+  $('mc-p90').textContent = `${d.stats.p90}%`;
+  $('mc-pos').textContent = `${d.stats.pct_positive}%`;
+
+  $('mc-img').src = `data:image/png;base64,${d.chart}`;
+  $('mc-img').style.display = 'block';
+  showOverlay('mc-loading', false);
+
+  const tbody = document.querySelector('#pct-table tbody');
+  tbody.innerHTML = '';
+  for (const [pct, vals] of Object.entries(d.percentiles)) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><b>${pct}</b></td><td>${vals.irr}%</td><td>${vals.dpi}x</td><td>${vals.moic}x</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+// ── Sensitivity ───────────────────────────────────────────────────────────────
+async function runSensitivity(p) {
+  $('run-sensitivity-btn').disabled = true;
+  $('sens-img').style.display   = 'none';
+  $('sens-placeholder').style.display = 'none';
+  $('sens-table-wrap').style.display  = 'none';
+  $('sens-loading').style.display     = 'flex';
+  await tick();
+
+  const fn  = pyodide.globals.get('get_sensitivity');
+  const nSimsSens = Math.max(50, Math.floor(p.nSims / 3));
+  const raw = fn(
+    p.sFundSize, p.sNinv, p.sResPct, p.sChkMin, p.sChkMax,
+    p.bucketsKey, nSimsSens, p.sEntry
+  );
+  const d = JSON.parse(raw);
+
+  $('sens-img').src = `data:image/png;base64,${d.chart}`;
+  $('sens-img').style.display = 'block';
+  $('sens-loading').style.display = 'none';
+  $('sens-table-wrap').style.display = 'block';
+
+  const tbody = document.querySelector('#sens-table tbody');
+  tbody.innerHTML = '';
+  d.table.forEach(row => {
+    const tr = document.createElement('tr');
+    const isCurrentEntry = Math.abs(row.entry_m - p.sEntry) < 2;
+    if (isCurrentEntry) tr.style.background = '#e8f5e9';
+    tr.innerHTML = `<td>${isCurrentEntry ? '▶ ' : ''}$${row.entry_m}M</td>` +
+      `<td>${row.irr_p10}%</td><td><b>${row.irr_median}%</b></td>` +
+      `<td>${row.irr_p90}%</td><td>${row.dpi}x</td>`;
+    tbody.appendChild(tr);
+  });
+
+  $('run-sensitivity-btn').disabled = false;
+}
+
+// ── Table renderer ────────────────────────────────────────────────────────────
+function renderTable(tableId, rows, cols) {
+  const tbody = document.querySelector(`#${tableId} tbody`);
+  tbody.innerHTML = '';
+  rows.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = cols.map(c => {
+      const v = row[c];
+      return `<td>${typeof v === 'number' ? v.toFixed(2) : (v ?? '—')}</td>`;
+    }).join('');
+    tbody.appendChild(tr);
+  });
+}
+
+// Allow the browser to repaint before we block the thread with Python
+function tick() { return new Promise(r => setTimeout(r, 20)); }
+
+// ── Pyodide init ──────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    setProgress(10, 'Loading Python runtime (Pyodide)…');
+    pyodide = await loadPyodide();
+
+    setProgress(30, 'Installing numpy & scipy…');
+    await pyodide.loadPackage(['numpy', 'scipy']);
+
+    setProgress(55, 'Installing pandas…');
+    await pyodide.loadPackage(['pandas']);
+
+    setProgress(70, 'Installing matplotlib…');
+    await pyodide.loadPackage(['matplotlib']);
+
+    setProgress(85, 'Loading fund model…');
+    const modelCode = await fetch('./model.py').then(r => r.text());
+    pyodide.runPython(modelCode);
+
+    setProgress(100, 'Ready.');
+    await new Promise(r => setTimeout(r, 300));
+
+    $('loading-screen').style.display = 'none';
+    $('app').classList.add('visible');
+
+    isReady = true;
+    const p = getParams();
+    updateLabelsAndHint(p);
+    triggerRun('overview');
+
+  } catch (e) {
+    $('loading-msg').textContent = 'Error: ' + e.message;
+    console.error(e);
+  }
+}
+
+init();
+</script>
+</body>
+</html>

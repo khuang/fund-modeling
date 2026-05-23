@@ -686,26 +686,41 @@ def _plot_boxwhisker(irr_dist, fund_sizes, n_inv_list, best):
 def _plot_pareto(rows, best, fund_sizes):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
 
-    fs_unique  = sorted(set(r['fund_size'] for r in rows))
-    colors     = plt.cm.viridis(np.linspace(0.1, 0.9, len(fs_unique)))
-    color_map  = dict(zip(fs_unique, colors))
+    fs_unique = sorted(set(r['fund_size'] for r in rows))
+    n_fs      = len(fs_unique)
+    # tab20 gives 20 perceptually distinct categorical colors; fall back to
+    # hsv for grids with more fund sizes
+    if n_fs <= 20:
+        raw_colors = plt.cm.tab20(np.linspace(0, 1, 20))[:n_fs]
+    else:
+        raw_colors = plt.cm.hsv(np.linspace(0, 0.9, n_fs))
+    # Convert to hex strings — unambiguously interpreted as a single color
+    color_map = {fs: '#{:02x}{:02x}{:02x}'.format(
+                      int(c[0]*255), int(c[1]*255), int(c[2]*255))
+                 for fs, c in zip(fs_unique, raw_colors)}
 
-    for r in rows:
-        is_best = (r['fund_size'] == best['fund_size'] and r['n_inv'] == best['n_inv'])
-        ax1.scatter(r['irr_p10'], r['irr_median'],
-                    s=200 if is_best else 70,
-                    color=color_map[r['fund_size']],
-                    marker='*' if is_best else 'o',
-                    edgecolors='red' if is_best else 'none',
-                    linewidths=1.5, zorder=10 if is_best else 5)
-        if is_best:
-            ax1.annotate(
-                f"  ★ ${r['fund_size']}M / {r['n_inv']} cos\n  avg ${r['avg_check']}M check",
-                (r['irr_p10'], r['irr_median']), fontsize=8.5, color='red')
+    # One scatter call per fund_size so the legend label sticks correctly
+    best_fs, best_ni = best['fund_size'], best['n_inv']
+    for fs in fs_unique:
+        color   = color_map[fs]
+        regular = [(r['irr_p10'], r['irr_median'])
+                   for r in rows
+                   if r['fund_size'] == fs
+                   and not (r['fund_size'] == best_fs and r['n_inv'] == best_ni)]
+        if regular:
+            xs, ys = zip(*regular)
+            ax1.scatter(xs, ys, s=70, color=color, label=f'${fs}M', zorder=5)
 
-    for fs, color in color_map.items():
-        ax1.scatter([], [], color=color, label=f'${fs}M', s=50)
-    ax1.legend(title='Fund size', fontsize=8, title_fontsize=8, loc='lower right')
+    # Best point drawn on top (same color as its fund_size, star marker)
+    ax1.scatter(best['irr_p10'], best['irr_median'],
+                s=250, color=color_map[best_fs], marker='*',
+                edgecolors='red', linewidths=1.5, zorder=10)
+    ax1.annotate(
+        f"  ★ ${best_fs}M / {best_ni} cos\n  avg ${best['avg_check']}M check",
+        (best['irr_p10'], best['irr_median']), fontsize=8.5, color='red')
+
+    ax1.legend(title='Fund size', fontsize=7, title_fontsize=8,
+               loc='lower right', ncol=max(1, n_fs // 8))
     ax1.set_xlabel('P10 Gross IRR (%)  ← downside risk')
     ax1.set_ylabel('Median Gross IRR (%)')
     ax1.set_title('Risk / Return Scatter\n(upper-right = better)', fontweight='bold')

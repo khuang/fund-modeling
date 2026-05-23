@@ -53,6 +53,7 @@ class FundConfig:
     outcome_buckets: List[OutcomeBucket]
     avg_hold_yrs: float
     std_hold_yrs: float
+    follow_on_markup: float = 5.0
     fund_life_yrs: int = 10
     invest_period_yrs: int = 5
 
@@ -123,8 +124,16 @@ def simulate_portfolio(cfg: FundConfig, seed=None) -> pd.DataFrame:
         exit_vals[i]  = np.exp(rng.uniform(np.log(lo), np.log(b.exit_val_hi_m)))
         rounds_arr[i] = max(0.0, rng.normal(b.avg_dilutive_rounds, 0.5))
 
+    # Initial stake: purchased at seed entry, diluted by all subsequent rounds
     initial_ownership = initial_checks / cfg.entry_post_money_m
-    diluted_ownership = initial_ownership * (1 - cfg.dilution_per_round) ** rounds_arr
+    initial_diluted   = initial_ownership * (1 - cfg.dilution_per_round) ** rounds_arr
+
+    # Follow-on: purchased at entry × markup (e.g. Series A), diluted by (rounds-1) later rounds
+    fo_valuation   = cfg.entry_post_money_m * cfg.follow_on_markup
+    fo_ownership   = follow_on / fo_valuation
+    fo_diluted     = fo_ownership * (1 - cfg.dilution_per_round) ** np.maximum(0.0, rounds_arr - 1)
+
+    diluted_ownership = initial_diluted + fo_diluted
     gross_proceeds    = diluted_ownership * exit_vals
     multiples = np.where(total_invested > 0, gross_proceeds / total_invested, 0.0)
 
@@ -282,7 +291,7 @@ def run_growth_as_followon(seed_result, growth_cfg, seed=42):
 
 # ── Config builders ───────────────────────────────────────────────────────────
 def _seed_cfg(s_fund_size, s_entry, s_n_inv, s_reserve_pct,
-              s_chk_min, s_chk_max, buckets):
+              s_chk_min, s_chk_max, buckets, fo_markup=5.0):
     return FundConfig(
         name='Seed Fund I', fund_size_m=float(s_fund_size), vintage_year=2026,
         entry_post_money_m=float(s_entry), dilution_per_round=0.22,
@@ -291,6 +300,7 @@ def _seed_cfg(s_fund_size, s_entry, s_n_inv, s_reserve_pct,
         check_min_m=float(s_chk_min), check_max_m=float(s_chk_max),
         follow_on_pct=0.15, outcome_buckets=buckets,
         avg_hold_yrs=7.0, std_hold_yrs=1.5,
+        follow_on_markup=float(fo_markup),
     )
 
 def _growth_cfg(g_fund_size, g_entry, g_n_inv, g_reserve_pct):
@@ -407,11 +417,11 @@ def _plot_sensitivity(entry_range, irr_p10_list, irr_med_list, irr_p90_list,
 
 # ── Public API ────────────────────────────────────────────────────────────────
 def get_overview(s_fund_size, s_entry, s_n_inv, s_reserve_pct, s_chk_min, s_chk_max,
-                 g_fund_size, g_entry, g_n_inv, g_reserve_pct, buckets_json):
+                 g_fund_size, g_entry, g_n_inv, g_reserve_pct, buckets_json, fo_markup=5.0):
     """Single deterministic run (seed=42). Returns JSON."""
     bkts       = _parse_buckets(buckets_json)
     seed_cfg   = _seed_cfg(s_fund_size, s_entry, s_n_inv, s_reserve_pct,
-                            s_chk_min, s_chk_max, bkts)
+                            s_chk_min, s_chk_max, bkts, fo_markup)
     growth_cfg = _growth_cfg(g_fund_size, g_entry, g_n_inv, g_reserve_pct)
     seed_r     = run_fund(seed_cfg, seed=42)
     growth_r   = run_growth_as_followon(seed_r, growth_cfg, seed=42)
@@ -478,11 +488,11 @@ def get_overview(s_fund_size, s_entry, s_n_inv, s_reserve_pct, s_chk_min, s_chk_
 
 
 def get_mc(s_fund_size, s_entry, s_n_inv, s_reserve_pct, s_chk_min, s_chk_max,
-           buckets_json, n_sims):
+           buckets_json, fo_markup, n_sims):
     """Monte Carlo simulation. Returns JSON with percentile stats + chart."""
     bkts      = _parse_buckets(buckets_json)
     seed_cfg  = _seed_cfg(s_fund_size, s_entry, s_n_inv, s_reserve_pct,
-                           s_chk_min, s_chk_max, bkts)
+                           s_chk_min, s_chk_max, bkts, fo_markup)
     deployed  = seed_cfg.fund_size_m * seed_cfg.deployment_rate
     undeployed = seed_cfg.fund_size_m * (1 - seed_cfg.deployment_rate)
 
@@ -737,7 +747,7 @@ def _plot_pareto(rows, best, fund_sizes):
     return _fig_to_b64(fig)
 
 
-def get_optimizer(entry_val, reserve_pct, buckets_json, n_sims,
+def get_optimizer(entry_val, reserve_pct, buckets_json, fo_markup, n_sims,
                   fs_min=75, fs_max=250, ni_min=10, ni_max=70, n_steps=7):
     """Grid search over fund_size × n_investments.
 
@@ -780,6 +790,7 @@ def get_optimizer(entry_val, reserve_pct, buckets_json, n_sims,
                 check_min_m=chk_min, check_max_m=chk_max,
                 follow_on_pct=0.15, outcome_buckets=bkts,
                 avg_hold_yrs=7.0, std_hold_yrs=1.5,
+                follow_on_markup=float(fo_markup),
             )
             dep    = cfg.fund_size_m * cfg.deployment_rate
             undep  = cfg.fund_size_m * (1 - cfg.deployment_rate)

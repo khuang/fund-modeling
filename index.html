@@ -649,6 +649,10 @@
         <label>Max check ($M) <span style="opacity:0.55;font-size:0.7rem">auto</span></label>
         <input type="number" id="s-cmax" class="sidebar-input" min="0.1" max="100" step="0.1" value="7">
       </div>
+      <div class="control">
+        <label>Follow-on markup <span id="lbl-s-fo-markup">5×</span></label>
+        <input type="range" id="s-fo-markup" min="1" max="20" step="0.5" value="5">
+      </div>
       <div class="param-hint" id="seed-hint"></div>
 
       <div class="section-label">Growth Fund I</div>
@@ -990,6 +994,10 @@
                 <label>Follow-on reserve (%)</label>
                 <input type="number" id="opt-reserve" class="opt-input" value="10" min="0" max="70" step="5">
               </div>
+              <div class="opt-field">
+                <label>Follow-on markup (×entry)</label>
+                <input type="number" id="opt-fo-markup" class="opt-input" value="5" min="1" max="20" step="0.5">
+              </div>
               <div class="opt-field" style="grid-column: 1 / -1">
                 <label>Grid steps (N per axis)</label>
                 <input type="number" id="opt-steps" class="opt-input" value="7" min="3" max="20" step="1">
@@ -1180,6 +1188,7 @@
         gResPct: parseInt(gResEl.value),
         nSims: parseInt(nsimsEl.value),
         bucketsJson: readBuckets(),
+        foMarkup: parseFloat($('s-fo-markup').value) || 5,
       };
     }
 
@@ -1193,6 +1202,7 @@
       $('lbl-g-ninv').textContent = p.gNinv;
       $('lbl-g-res').textContent = `${p.gResPct}%`;
       $('lbl-nsims').textContent = p.nSims;
+      $('lbl-s-fo-markup').textContent = `${p.foMarkup}×`;
 
       // Derived stats (no Python needed)
       const deployed = p.sFundSize * 0.90;
@@ -1253,7 +1263,7 @@
       $(id).addEventListener('input', () => { syncCheckRange(); onParamChange(); });
     });
     // All other params
-    ['s-entry', 's-cmin', 's-cmax',
+    ['s-entry', 's-cmin', 's-cmax', 's-fo-markup',
       'g-size', 'g-entry', 'g-ninv', 'g-res', 'nsims'].forEach(id => {
         $(id).addEventListener('input', onParamChange);
       });
@@ -1312,7 +1322,7 @@
       const fn = pyodide.globals.get('get_overview');
       const raw = fn(
         p.sFundSize, p.sEntry, p.sNinv, p.sResPct, p.sChkMin, p.sChkMax,
-        p.gFundSize, p.gEntry, p.gNinv, p.gResPct, p.bucketsJson
+        p.gFundSize, p.gEntry, p.gNinv, p.gResPct, p.bucketsJson, p.foMarkup
       );
       const d = JSON.parse(raw);
 
@@ -1349,7 +1359,7 @@
       const fn = pyodide.globals.get('get_mc');
       const raw = fn(
         p.sFundSize, p.sEntry, p.sNinv, p.sResPct, p.sChkMin, p.sChkMax,
-        p.bucketsJson, p.nSims
+        p.bucketsJson, p.foMarkup, p.nSims
       );
       const d = JSON.parse(raw);
 
@@ -1418,10 +1428,11 @@
       const niMin = parseInt($('opt-ni-min').value) || 10;
       const niMax = parseInt($('opt-ni-max').value) || 70;
       const optEntry = parseFloat($('opt-entry').value) || 27.5;
-      const optReserve = parseInt($('opt-reserve').value);   // 0 is valid
+      const optReserve  = parseInt($('opt-reserve').value);   // 0 is valid
+      const optFoMarkup = parseFloat($('opt-fo-markup').value) || 5;
       const nSteps = parseInt($('opt-steps').value) || 7;
       const raw = fn(optEntry, isNaN(optReserve) ? 10 : optReserve,
-        p.bucketsJson, nSimsOpt, fsMin, fsMax, niMin, niMax, nSteps);
+        p.bucketsJson, optFoMarkup, nSimsOpt, fsMin, fsMax, niMin, niMax, nSteps);
       const d = JSON.parse(raw);
 
       // Optimal config card

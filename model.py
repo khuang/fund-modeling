@@ -82,6 +82,12 @@ GROWTH_BUCKETS = [
 
 GRADUATION_RATE = 0.37
 
+
+def _parse_buckets(buckets_json: str) -> List[OutcomeBucket]:
+    data = json.loads(buckets_json)
+    return [OutcomeBucket(**b) for b in data]
+
+
 # ── Core model functions ──────────────────────────────────────────────────────
 def simulate_portfolio(cfg: FundConfig, seed=None) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
@@ -276,15 +282,14 @@ def run_growth_as_followon(seed_result, growth_cfg, seed=42):
 
 # ── Config builders ───────────────────────────────────────────────────────────
 def _seed_cfg(s_fund_size, s_entry, s_n_inv, s_reserve_pct,
-              s_chk_min, s_chk_max, buckets_key):
-    bkts = BASE_BUCKETS if buckets_key == 'base' else BEAR_BUCKETS
+              s_chk_min, s_chk_max, buckets):
     return FundConfig(
         name='Seed Fund I', fund_size_m=float(s_fund_size), vintage_year=2026,
         entry_post_money_m=float(s_entry), dilution_per_round=0.22,
         deployment_rate=0.90, num_investments=int(s_n_inv),
         reserve_ratio=int(s_reserve_pct) / 100.0,
         check_min_m=float(s_chk_min), check_max_m=float(s_chk_max),
-        follow_on_pct=0.15, outcome_buckets=bkts,
+        follow_on_pct=0.15, outcome_buckets=buckets,
         avg_hold_yrs=7.0, std_hold_yrs=1.5,
     )
 
@@ -402,10 +407,11 @@ def _plot_sensitivity(entry_range, irr_p10_list, irr_med_list, irr_p90_list,
 
 # ── Public API ────────────────────────────────────────────────────────────────
 def get_overview(s_fund_size, s_entry, s_n_inv, s_reserve_pct, s_chk_min, s_chk_max,
-                 g_fund_size, g_entry, g_n_inv, g_reserve_pct, buckets_key):
+                 g_fund_size, g_entry, g_n_inv, g_reserve_pct, buckets_json):
     """Single deterministic run (seed=42). Returns JSON."""
+    bkts       = _parse_buckets(buckets_json)
     seed_cfg   = _seed_cfg(s_fund_size, s_entry, s_n_inv, s_reserve_pct,
-                            s_chk_min, s_chk_max, buckets_key)
+                            s_chk_min, s_chk_max, bkts)
     growth_cfg = _growth_cfg(g_fund_size, g_entry, g_n_inv, g_reserve_pct)
     seed_r     = run_fund(seed_cfg, seed=42)
     growth_r   = run_growth_as_followon(seed_r, growth_cfg, seed=42)
@@ -472,10 +478,11 @@ def get_overview(s_fund_size, s_entry, s_n_inv, s_reserve_pct, s_chk_min, s_chk_
 
 
 def get_mc(s_fund_size, s_entry, s_n_inv, s_reserve_pct, s_chk_min, s_chk_max,
-           buckets_key, n_sims):
+           buckets_json, n_sims):
     """Monte Carlo simulation. Returns JSON with percentile stats + chart."""
+    bkts      = _parse_buckets(buckets_json)
     seed_cfg  = _seed_cfg(s_fund_size, s_entry, s_n_inv, s_reserve_pct,
-                           s_chk_min, s_chk_max, buckets_key)
+                           s_chk_min, s_chk_max, bkts)
     deployed  = seed_cfg.fund_size_m * seed_cfg.deployment_rate
     undeployed = seed_cfg.fund_size_m * (1 - seed_cfg.deployment_rate)
 
@@ -520,10 +527,10 @@ def get_mc(s_fund_size, s_entry, s_n_inv, s_reserve_pct, s_chk_min, s_chk_max,
 
 
 def get_sensitivity(s_fund_size, s_n_inv, s_reserve_pct, s_chk_min, s_chk_max,
-                    buckets_key, n_sims, current_entry):
+                    buckets_json, n_sims, current_entry):
     """Entry valuation sweep $12–$50M. Returns JSON with chart + table."""
     entry_range = list(np.arange(12.0, 51.0, 3.0))
-    bkts = BASE_BUCKETS if buckets_key == 'base' else BEAR_BUCKETS
+    bkts = _parse_buckets(buckets_json)
 
     irr_p10_list = []; irr_med_list = []; irr_p90_list = []; dpi_med_list = []
 
@@ -730,7 +737,7 @@ def _plot_pareto(rows, best, fund_sizes):
     return _fig_to_b64(fig)
 
 
-def get_optimizer(entry_val, reserve_pct, buckets_key, n_sims,
+def get_optimizer(entry_val, reserve_pct, buckets_json, n_sims,
                   fs_min=75, fs_max=250, ni_min=10, ni_max=70, n_steps=7):
     """Grid search over fund_size × n_investments.
 
@@ -749,7 +756,7 @@ def get_optimizer(entry_val, reserve_pct, buckets_key, n_sims,
     N_INV_LIST = sorted(set(max(5, int(round(v)))
                             for v in np.geomspace(ni_min, ni_max, n_steps)))
 
-    bkts     = BASE_BUCKETS if buckets_key == 'base' else BEAR_BUCKETS
+    bkts     = _parse_buckets(buckets_json)
     n_sims   = int(n_sims)
     res_frac = int(reserve_pct) / 100.0
 

@@ -165,23 +165,82 @@
       opacity: 0.9;
     }
 
-    .radio-group {
+    .preset-btns {
       display: flex;
-      flex-direction: column;
       gap: 0.4rem;
       margin-top: 0.4rem;
+      margin-bottom: 0.5rem;
     }
 
-    .radio-group label {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      font-size: 0.78rem;
+    .preset-btn {
+      flex: 1;
+      padding: 0.3rem 0;
+      font-size: 0.73rem;
+      font-weight: 600;
+      background: rgba(255,255,255,0.12);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 4px;
       cursor: pointer;
+      transition: background 0.15s;
     }
 
-    .radio-group input[type=radio] {
-      accent-color: #64b5f6;
+    .preset-btn:hover {
+      background: rgba(255,255,255,0.22);
+    }
+
+    .bucket-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.68rem;
+      margin-top: 0.2rem;
+    }
+
+    .bucket-table th {
+      font-size: 0.62rem;
+      font-weight: 600;
+      opacity: 0.65;
+      padding: 0 2px 3px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .bucket-table th:first-child {
+      text-align: left;
+    }
+
+    .bucket-table td {
+      padding: 2px 2px;
+      vertical-align: middle;
+    }
+
+    .bucket-table td:first-child {
+      font-size: 0.65rem;
+      opacity: 0.85;
+      white-space: nowrap;
+    }
+
+    .bkt-input {
+      width: 44px;
+      padding: 1px 3px;
+      font-size: 0.68rem;
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 3px;
+      text-align: center;
+    }
+
+    .bkt-input:focus {
+      outline: none;
+      border-color: #64b5f6;
+    }
+
+    #bucket-sum-warn {
+      font-size: 0.68rem;
+      color: #ef9a9a;
+      margin-top: 0.3rem;
+      display: none;
     }
 
     /* ── Main content ───────────────────────────────────────────────────────── */
@@ -619,10 +678,60 @@
       <div style="font-size:0.75rem;opacity:0.6;margin-top:0.2rem;margin-bottom:0.8rem;">
         Sensitivity uses ÷3 per data point.
       </div>
-      <div class="radio-group">
-        <label><input type="radio" name="scenario" value="base" checked> Base case (17% loss rate)</label>
-        <label><input type="radio" name="scenario" value="bear"> Bear market (28% loss rate)</label>
+      <div class="section-label">Outcome Buckets</div>
+      <div class="preset-btns">
+        <button class="preset-btn" onclick="setBuckets('base')">Base case</button>
+        <button class="preset-btn" onclick="setBuckets('bear')">Bear market</button>
       </div>
+      <table class="bucket-table">
+        <thead>
+          <tr>
+            <th>Bucket</th>
+            <th>Prob%</th>
+            <th>Lo$M</th>
+            <th>Hi$M</th>
+            <th>Rds</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Total Loss</td>
+            <td><input class="bkt-input" id="bkt-0-prob" type="number" min="0" max="100" step="1" value="17"></td>
+            <td><input class="bkt-input" id="bkt-0-lo" type="number" min="0" step="1" value="0"></td>
+            <td><input class="bkt-input" id="bkt-0-hi" type="number" min="0" step="1" value="0"></td>
+            <td><input class="bkt-input" id="bkt-0-rounds" type="number" min="0" step="0.5" value="0"></td>
+          </tr>
+          <tr>
+            <td>Small Ret</td>
+            <td><input class="bkt-input" id="bkt-1-prob" type="number" min="0" max="100" step="1" value="31"></td>
+            <td><input class="bkt-input" id="bkt-1-lo" type="number" min="0" step="1" value="2"></td>
+            <td><input class="bkt-input" id="bkt-1-hi" type="number" min="0" step="1" value="50"></td>
+            <td><input class="bkt-input" id="bkt-1-rounds" type="number" min="0" step="0.5" value="0.5"></td>
+          </tr>
+          <tr>
+            <td>Mid Return</td>
+            <td><input class="bkt-input" id="bkt-2-prob" type="number" min="0" max="100" step="1" value="27"></td>
+            <td><input class="bkt-input" id="bkt-2-lo" type="number" min="0" step="1" value="50"></td>
+            <td><input class="bkt-input" id="bkt-2-hi" type="number" min="0" step="1" value="400"></td>
+            <td><input class="bkt-input" id="bkt-2-rounds" type="number" min="0" step="0.5" value="2"></td>
+          </tr>
+          <tr>
+            <td>Outsize</td>
+            <td><input class="bkt-input" id="bkt-3-prob" type="number" min="0" max="100" step="1" value="13"></td>
+            <td><input class="bkt-input" id="bkt-3-lo" type="number" min="0" step="1" value="400"></td>
+            <td><input class="bkt-input" id="bkt-3-hi" type="number" min="0" step="1" value="2000"></td>
+            <td><input class="bkt-input" id="bkt-3-rounds" type="number" min="0" step="0.5" value="3"></td>
+          </tr>
+          <tr>
+            <td>Outlier</td>
+            <td><input class="bkt-input" id="bkt-4-prob" type="number" min="0" max="100" step="1" value="6"></td>
+            <td><input class="bkt-input" id="bkt-4-lo" type="number" min="0" step="1" value="2000"></td>
+            <td><input class="bkt-input" id="bkt-4-hi" type="number" min="0" step="1" value="10000"></td>
+            <td><input class="bkt-input" id="bkt-4-rounds" type="number" min="0" step="0.5" value="4"></td>
+          </tr>
+        </tbody>
+      </table>
+      <div id="bucket-sum-warn">⚠ Probabilities should sum to 100%</div>
     </aside>
 
     <!-- Content -->
@@ -966,6 +1075,52 @@
     const $ = id => document.getElementById(id);
     const fmt = (v, decimals = 1) => (typeof v === 'number' ? v.toFixed(decimals) : '—');
 
+    // ── Outcome bucket presets ────────────────────────────────────────────────────
+    const BUCKET_PRESETS = {
+      base: [
+        {label:'Total Loss',   prob:17, exit_val_lo_m:0,    exit_val_hi_m:0,     avg_dilutive_rounds:0.0},
+        {label:'Small Return', prob:31, exit_val_lo_m:2,    exit_val_hi_m:50,    avg_dilutive_rounds:0.5},
+        {label:'Mid Return',   prob:27, exit_val_lo_m:50,   exit_val_hi_m:400,   avg_dilutive_rounds:2.0},
+        {label:'Outsize',      prob:13, exit_val_lo_m:400,  exit_val_hi_m:2000,  avg_dilutive_rounds:3.0},
+        {label:'Outlier',      prob:6,  exit_val_lo_m:2000, exit_val_hi_m:10000, avg_dilutive_rounds:4.0},
+      ],
+      bear: [
+        {label:'Total Loss',   prob:28, exit_val_lo_m:0,    exit_val_hi_m:0,     avg_dilutive_rounds:0.0},
+        {label:'Small Return', prob:33, exit_val_lo_m:2,    exit_val_hi_m:40,    avg_dilutive_rounds:0.5},
+        {label:'Mid Return',   prob:24, exit_val_lo_m:40,   exit_val_hi_m:250,   avg_dilutive_rounds:2.0},
+        {label:'Outsize',      prob:12, exit_val_lo_m:250,  exit_val_hi_m:1000,  avg_dilutive_rounds:3.0},
+        {label:'Outlier',      prob:3,  exit_val_lo_m:1000, exit_val_hi_m:5000,  avg_dilutive_rounds:4.0},
+      ],
+    };
+
+    const BUCKET_LABELS = ['Total Loss','Small Return','Mid Return','Outsize','Outlier'];
+
+    function setBuckets(presetName) {
+      BUCKET_PRESETS[presetName].forEach((b, i) => {
+        $(`bkt-${i}-prob`).value   = b.prob;
+        $(`bkt-${i}-lo`).value     = b.exit_val_lo_m;
+        $(`bkt-${i}-hi`).value     = b.exit_val_hi_m;
+        $(`bkt-${i}-rounds`).value = b.avg_dilutive_rounds;
+      });
+      validateBucketSum();
+      onParamChange();
+    }
+
+    function validateBucketSum() {
+      const total = [0,1,2,3,4].reduce((s, i) => s + (+$(`bkt-${i}-prob`).value || 0), 0);
+      $('bucket-sum-warn').style.display = Math.abs(total - 100) > 0.5 ? '' : 'none';
+    }
+
+    function readBuckets() {
+      return JSON.stringify([0,1,2,3,4].map(i => ({
+        label:               BUCKET_LABELS[i],
+        prob:                (+$(`bkt-${i}-prob`).value) / 100,
+        exit_val_lo_m:       +$(`bkt-${i}-lo`).value,
+        exit_val_hi_m:       +$(`bkt-${i}-hi`).value,
+        avg_dilutive_rounds: +$(`bkt-${i}-rounds`).value,
+      })));
+    }
+
     function setProgress(pct, msg) {
       $('progress').style.width = pct + '%';
       $('loading-msg').textContent = msg;
@@ -982,7 +1137,6 @@
       const gSizeEl = $('g-size'), gEntryEl = $('g-entry');
       const gNinvEl = $('g-ninv'), gResEl = $('g-res');
       const nsimsEl = $('nsims');
-      const scenario = document.querySelector('input[name="scenario"]:checked').value;
 
       let cmin = parseFloat(sCminEl.value);
       let cmax = parseFloat(sCmaxEl.value);
@@ -1000,7 +1154,7 @@
         gNinv: parseInt(gNinvEl.value),
         gResPct: parseInt(gResEl.value),
         nSims: parseInt(nsimsEl.value),
-        bucketsKey: scenario,
+        bucketsJson: readBuckets(),
       };
     }
 
@@ -1029,7 +1183,7 @@
       $('topbar-sub').textContent =
         `Seed $${p.sFundSize}M · ${p.sNinv} cos · $${p.sEntry}M entry  |  ` +
         `Growth $${p.gFundSize}M · ${p.gNinv} cos · $${p.gEntry}M entry  |  ` +
-        `${p.nSims} sims · ${p.bucketsKey === 'bear' ? 'Bear market' : 'Base case'}`;
+        `${p.nSims} sims`;
     }
 
     // ── Sync check range from structural params ───────────────────────────────────
@@ -1078,8 +1232,12 @@
       'g-size', 'g-entry', 'g-ninv', 'g-res', 'nsims'].forEach(id => {
         $(id).addEventListener('input', onParamChange);
       });
-    document.querySelectorAll('input[name="scenario"]').forEach(r => {
-      r.addEventListener('change', onParamChange);
+    // Bucket probability inputs: validate sum + rerun
+    [0,1,2,3,4].forEach(i => {
+      $(`bkt-${i}-prob`).addEventListener('input', () => { validateBucketSum(); onParamChange(); });
+      $(`bkt-${i}-lo`).addEventListener('input', onParamChange);
+      $(`bkt-${i}-hi`).addEventListener('input', onParamChange);
+      $(`bkt-${i}-rounds`).addEventListener('input', onParamChange);
     });
 
     // ── Run sensitivity button ────────────────────────────────────────────────────
@@ -1137,7 +1295,7 @@
       const fn = pyodide.globals.get('get_overview');
       const raw = fn(
         p.sFundSize, p.sEntry, p.sNinv, p.sResPct, p.sChkMin, p.sChkMax,
-        p.gFundSize, p.gEntry, p.gNinv, p.gResPct, p.bucketsKey
+        p.gFundSize, p.gEntry, p.gNinv, p.gResPct, p.bucketsJson
       );
       const d = JSON.parse(raw);
 
@@ -1174,7 +1332,7 @@
       const fn = pyodide.globals.get('get_mc');
       const raw = fn(
         p.sFundSize, p.sEntry, p.sNinv, p.sResPct, p.sChkMin, p.sChkMax,
-        p.bucketsKey, p.nSims
+        p.bucketsJson, p.nSims
       );
       const d = JSON.parse(raw);
 
@@ -1211,7 +1369,7 @@
       const nSimsSens = Math.max(50, Math.floor(p.nSims / 3));
       const raw = fn(
         p.sFundSize, p.sNinv, p.sResPct, p.sChkMin, p.sChkMax,
-        p.bucketsKey, nSimsSens, p.sEntry
+        p.bucketsJson, nSimsSens, p.sEntry
       );
       const d = JSON.parse(raw);
 
@@ -1271,7 +1429,7 @@
       const optReserve= parseInt($('opt-reserve').value);   // 0 is valid
       const nSteps    = parseInt($('opt-steps').value)     || 7;
       const raw = fn(optEntry, isNaN(optReserve) ? 10 : optReserve,
-                     p.bucketsKey, nSimsOpt, fsMin, fsMax, niMin, niMax, nSteps);
+                     p.bucketsJson, nSimsOpt, fsMin, fsMax, niMin, niMax, nSteps);
       const d = JSON.parse(raw);
 
       // Optimal config card

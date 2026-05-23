@@ -627,58 +627,35 @@ def _plot_boxwhisker(irr_dist, fund_sizes, n_inv_list, best):
     blue    = '#1a237e'
     red_col = '#c62828'
     light   = '#e8eaf6'
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5), facecolor='white')
-    best_fs = best['fund_size']
     best_ni = best['n_inv']
 
-    # ── Panel 1: by fund size (pool across all n_inv) ────────────────────────
-    fs_data = [[v for ni in n_inv_list for v in irr_dist.get((fs, ni), [])]
-               for fs in fund_sizes]
-    bp1 = ax1.boxplot(fs_data, labels=[f'${fs}M' for fs in fund_sizes],
-                      patch_artist=True,
-                      medianprops=dict(color=red_col, linewidth=2),
-                      whiskerprops=dict(linewidth=1.2, color='#555'),
-                      capprops=dict(linewidth=1.2, color='#555'),
-                      flierprops=dict(marker='.', markersize=3, alpha=0.35, color='#999'))
-    for patch, fs in zip(bp1['boxes'], fund_sizes):
-        patch.set_facecolor(red_col if fs == best_fs else light)
-        patch.set_edgecolor(blue)
-        patch.set_alpha(0.85 if fs == best_fs else 0.65)
-    ax1.axhline(0, color='#9e9e9e', linewidth=0.8, linestyle='--')
-    ax1.set_title('IRR Distribution by Fund Size\n(all portfolio sizes pooled)',
-                  fontweight='bold', fontsize=10)
-    ax1.set_xlabel('Fund Size'); ax1.set_ylabel('Gross IRR (%)')
-    ax1.tick_params(axis='x', rotation=30)
-    for lbl in ax1.get_xticklabels():
-        if lbl.get_text() == f'${best_fs}M':
-            lbl.set_color(red_col); lbl.set_fontweight('bold')
+    fig, ax = plt.subplots(figsize=(max(8, len(n_inv_list) * 0.9 + 2), 5),
+                           facecolor='white')
 
-    # ── Panel 2: by # investments (pool across all fund sizes) ───────────────
     ni_data = [[v for fs in fund_sizes for v in irr_dist.get((fs, ni), [])]
                for ni in n_inv_list]
-    bp2 = ax2.boxplot(ni_data, labels=[str(ni) for ni in n_inv_list],
-                      patch_artist=True,
-                      medianprops=dict(color=red_col, linewidth=2),
-                      whiskerprops=dict(linewidth=1.2, color='#555'),
-                      capprops=dict(linewidth=1.2, color='#555'),
-                      flierprops=dict(marker='.', markersize=3, alpha=0.35, color='#999'))
-    for patch, ni in zip(bp2['boxes'], n_inv_list):
+    bp = ax.boxplot(ni_data, labels=[str(ni) for ni in n_inv_list],
+                    patch_artist=True,
+                    medianprops=dict(color=red_col, linewidth=2),
+                    whiskerprops=dict(linewidth=1.2, color='#555'),
+                    capprops=dict(linewidth=1.2, color='#555'),
+                    flierprops=dict(marker='.', markersize=3, alpha=0.35, color='#999'))
+    for patch, ni in zip(bp['boxes'], n_inv_list):
         patch.set_facecolor(red_col if ni == best_ni else light)
         patch.set_edgecolor(blue)
         patch.set_alpha(0.85 if ni == best_ni else 0.65)
-    ax2.axhline(0, color='#9e9e9e', linewidth=0.8, linestyle='--')
-    ax2.set_title('IRR Distribution by # Investments\n(all fund sizes pooled)',
-                  fontweight='bold', fontsize=10)
-    ax2.set_xlabel('# Investments'); ax2.set_ylabel('Gross IRR (%)')
-    for lbl in ax2.get_xticklabels():
+
+    ax.axhline(0, color='#9e9e9e', linewidth=0.8, linestyle='--')
+    ax.set_title(
+        'Gross IRR Distribution by # Investments  (all fund sizes pooled)\n'
+        'red = optimal # investments from grid search',
+        fontweight='bold', fontsize=10)
+    ax.set_xlabel('# Investments')
+    ax.set_ylabel('Gross IRR (%)')
+    for lbl in ax.get_xticklabels():
         if lbl.get_text() == str(best_ni):
             lbl.set_color(red_col); lbl.set_fontweight('bold')
 
-    plt.suptitle(
-        'Portfolio Construction — Return Distributions\n'
-        '(red box = dimension of optimal configuration; red line = median)',
-        fontsize=12, fontweight='bold')
     plt.tight_layout()
     return _fig_to_b64(fig)
 
@@ -688,30 +665,24 @@ def _plot_pareto(rows, best, fund_sizes):
 
     fs_unique = sorted(set(r['fund_size'] for r in rows))
     n_fs      = len(fs_unique)
-    # tab20 gives 20 perceptually distinct categorical colors; fall back to
-    # hsv for grids with more fund sizes
-    if n_fs <= 20:
-        raw_colors = plt.cm.tab20(np.linspace(0, 1, 20))[:n_fs]
-    else:
-        raw_colors = plt.cm.hsv(np.linspace(0, 0.9, n_fs))
-    # Convert to hex strings — unambiguously interpreted as a single color
-    color_map = {fs: '#{:02x}{:02x}{:02x}'.format(
-                      int(c[0]*255), int(c[1]*255), int(c[2]*255))
-                 for fs, c in zip(fs_unique, raw_colors)}
+    # tab20.colors is a list of plain Python (R,G,B) tuples — never ambiguous
+    # as a numpy array; cycle through 20 colours if n_fs > 20
+    palette   = list(plt.cm.tab20.colors)          # 20 tuples
+    color_map = {fs: palette[i % 20] for i, fs in enumerate(fs_unique)}
 
-    # One scatter call per fund_size so the legend label sticks correctly
+    # One scatter call per fund_size — label attached to real data points
     best_fs, best_ni = best['fund_size'], best['n_inv']
     for fs in fs_unique:
-        color   = color_map[fs]
+        col     = color_map[fs]
         regular = [(r['irr_p10'], r['irr_median'])
                    for r in rows
                    if r['fund_size'] == fs
                    and not (r['fund_size'] == best_fs and r['n_inv'] == best_ni)]
         if regular:
             xs, ys = zip(*regular)
-            ax1.scatter(xs, ys, s=70, color=color, label=f'${fs}M', zorder=5)
+            ax1.scatter(xs, ys, s=70, color=col, label=f'${fs}M', zorder=5)
 
-    # Best point drawn on top (same color as its fund_size, star marker)
+    # Best point on top — same hue as its fund_size, red star border
     ax1.scatter(best['irr_p10'], best['irr_median'],
                 s=250, color=color_map[best_fs], marker='*',
                 edgecolors='red', linewidths=1.5, zorder=10)

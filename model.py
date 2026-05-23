@@ -661,53 +661,69 @@ def _plot_boxwhisker(irr_dist, fund_sizes, n_inv_list, best):
 
 
 def _plot_pareto(rows, best, fund_sizes):
+    # IRR is scale-invariant with fund_size (check, ownership, proceeds all
+    # scale proportionally), so ax1 must colour by n_inv — the only dimension
+    # that actually moves IRR coordinates.
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
 
-    fs_unique = sorted(set(r['fund_size'] for r in rows))
-    n_fs      = len(fs_unique)
-    # tab20.colors is a list of plain Python (R,G,B) tuples — never ambiguous
-    # as a numpy array; cycle through 20 colours if n_fs > 20
-    palette   = list(plt.cm.tab20.colors)          # 20 tuples
-    color_map = {fs: palette[i % 20] for i, fs in enumerate(fs_unique)}
-
-    # One scatter call per fund_size — label attached to real data points
+    ni_unique = sorted(set(r['n_inv'] for r in rows))
+    palette   = list(plt.cm.tab20.colors)   # 20 plain Python (R,G,B) tuples
+    ni_color  = {ni: palette[i % 20] for i, ni in enumerate(ni_unique)}
     best_fs, best_ni = best['fund_size'], best['n_inv']
-    for fs in fs_unique:
-        col     = color_map[fs]
-        regular = [(r['irr_p10'], r['irr_median'])
-                   for r in rows
-                   if r['fund_size'] == fs
-                   and not (r['fund_size'] == best_fs and r['n_inv'] == best_ni)]
-        if regular:
-            xs, ys = zip(*regular)
-            ax1.scatter(xs, ys, s=70, color=col, label=f'${fs}M', zorder=5)
 
-    # Best point on top — same hue as its fund_size, red star border
-    ax1.scatter(best['irr_p10'], best['irr_median'],
-                s=250, color=color_map[best_fs], marker='*',
-                edgecolors='red', linewidths=1.5, zorder=10)
-    ax1.annotate(
-        f"  ★ ${best_fs}M / {best_ni} cos\n  avg ${best['avg_check']}M check",
-        (best['irr_p10'], best['irr_median']), fontsize=8.5, color='red')
+    # ── ax1: IRR_p10 vs IRR_median, one point per n_inv ─────────────────────
+    # All fund_sizes for the same n_inv land at the same coordinate; show the
+    # middle fund_size as the representative point to avoid false overlap.
+    for ni in ni_unique:
+        subset = [r for r in rows if r['n_inv'] == ni]
+        rep    = subset[len(subset) // 2]   # median fund_size representative
+        col    = ni_color[ni]
+        is_best = (ni == best_ni)
+        ax1.scatter(rep['irr_p10'], rep['irr_median'],
+                    s=220 if is_best else 80,
+                    color=col,
+                    marker='*' if is_best else 'o',
+                    edgecolors='red' if is_best else '#333',
+                    linewidths=1.5 if is_best else 0.5,
+                    zorder=10 if is_best else 5,
+                    label=f'{ni} cos')
+        if is_best:
+            ax1.annotate(
+                f'  ★ {ni} cos  (${best_fs}M fund)\n  avg ${best["avg_check"]}M check',
+                (rep['irr_p10'], rep['irr_median']), fontsize=8.5, color='red')
 
-    ax1.legend(title='Fund size', fontsize=7, title_fontsize=8,
-               loc='lower right', ncol=max(1, n_fs // 8))
+    ax1.legend(title='# investments', fontsize=7, title_fontsize=8,
+               loc='lower right', ncol=max(1, len(ni_unique) // 8))
     ax1.set_xlabel('P10 Gross IRR (%)  ← downside risk')
     ax1.set_ylabel('Median Gross IRR (%)')
-    ax1.set_title('Risk / Return Scatter\n(upper-right = better)', fontweight='bold')
+    ax1.set_title('IRR by # Investments\n(one point per n_inv; fund size doesn\'t shift IRR)',
+                  fontweight='bold')
     ax1.axvline(0, color='#9e9e9e', linewidth=0.7, linestyle=':')
 
-    avg_checks = [r['avg_check'] for r in rows]
-    scores     = [r['score']     for r in rows]
-    n_invs     = [r['n_inv']     for r in rows]
-    sc = ax2.scatter(avg_checks, scores, c=n_invs, cmap='plasma', s=70, alpha=0.85)
-    plt.colorbar(sc, ax=ax2, label='# investments')
-    best_ac = best['avg_check']; best_sc = best['score']
-    ax2.scatter(best_ac, best_sc, s=220, marker='*', color='red', zorder=10, label='Optimal')
+    # ── ax2: score vs avg_check, all fund_size × n_inv cells ────────────────
+    # avg_check = fund_size × 0.9 × (1−reserve) / n_inv, so it DOES vary with
+    # fund_size → meaningful x-axis variation here.
+    for ni in ni_unique:
+        col = ni_color[ni]
+        pts = [(r['avg_check'], r['score'])
+               for r in rows if r['n_inv'] == ni
+               and not (r['fund_size'] == best_fs and r['n_inv'] == best_ni)]
+        if pts:
+            xs, ys = zip(*pts)
+            ax2.scatter(xs, ys, s=60, color=col, alpha=0.8, zorder=5, label=f'{ni} cos')
+
+    ax2.scatter(best['avg_check'], best['score'],
+                s=220, color=ni_color[best_ni], marker='*',
+                edgecolors='red', linewidths=1.5, zorder=10)
+    ax2.annotate(f'  ★ ${best_fs}M / {best_ni} cos',
+                 (best['avg_check'], best['score']), fontsize=8.5, color='red')
+
+    ax2.legend(title='# investments', fontsize=7, title_fontsize=8,
+               loc='upper right', ncol=max(1, len(ni_unique) // 8))
     ax2.set_xlabel('Avg Initial Check Size ($M)')
-    ax2.set_ylabel('Risk-Adjusted Score')
-    ax2.set_title('Score vs Avg Check Size\n(colored by # investments)', fontweight='bold')
-    ax2.legend(fontsize=8)
+    ax2.set_ylabel('Risk-Adjusted Score  (0.6×Median + 0.4×P10 IRR)')
+    ax2.set_title('Score vs Avg Check Size\n(fund size drives x-axis spread per n_inv)',
+                  fontweight='bold')
 
     plt.suptitle('Portfolio Construction Optimizer', fontsize=12, fontweight='bold')
     plt.tight_layout()

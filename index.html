@@ -839,7 +839,7 @@
                 <table id="growth-table">
                   <thead>
                     <tr>
-                      <th>Source</th>
+                      <th>Outcome</th>
                       <th>n</th>
                       <th>Avg check ($M)</th>
                       <th>Invested ($M)</th>
@@ -1334,7 +1334,7 @@
       $('g-irr').textContent = `${d.growth.gross_irr}%`;
       $('g-moic').textContent = `${d.growth.gross_moic}x`;
       $('g-dpi').textContent = `${d.growth.gross_moic}x`;
-      $('g-sub').textContent = `${d.growth.n_grad} graduates + ${d.growth.n_co} co-investments`;
+      $('g-sub').textContent = `${d.growth.n_grad} seed winners followed`;
 
       $('c-moic').textContent = `${d.combined.moic}x`;
       $('c-proceeds').textContent = `$${d.combined.total_proceeds}M`;
@@ -1347,7 +1347,7 @@
       renderTable('seed-table', d.seed_by_bucket,
         ['outcome', 'n', 'avg_exit_m', 'invested', 'proceeds', 'moic']);
       renderTable('growth-table', d.growth_by_source,
-        ['source', 'n', 'avg_check', 'invested', 'proceeds', 'moic']);
+        ['outcome', 'n', 'avg_check', 'invested', 'proceeds', 'moic']);
     }
 
     // ── Monte Carlo ───────────────────────────────────────────────────────────────

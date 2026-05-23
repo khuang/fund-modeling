@@ -211,25 +211,27 @@ def run_fund(cfg: FundConfig, seed: int = 42) -> dict:
 
 
 def simulate_followon_portfolio(seed_port, seed_cfg, growth_cfg, seed=None):
+    """Growth fund only follows into seed winners — no new co-investments.
+    Graduates = top GRADUATION_RATE of seed portfolio by exit value, capped at
+    num_investments. All initial capital is split among graduates.
+    """
     rng = np.random.default_rng(seed)
     deployed    = growth_cfg.fund_size_m * growth_cfg.deployment_rate
     initial_cap = deployed * (1 - growth_cfg.reserve_ratio)
     reserve_cap = deployed * growth_cfg.reserve_ratio
-    n           = growth_cfg.num_investments
-    n_fo        = max(1, int(n * growth_cfg.follow_on_pct))
-    n_grad      = max(1, min(round(len(seed_port) * GRADUATION_RATE), n))
-    n_co        = n - n_grad
+    n_grad      = max(1, min(round(len(seed_port) * GRADUATION_RATE),
+                             growth_cfg.num_investments))
+    n_fo        = max(1, int(n_grad * growth_cfg.follow_on_pct))
     graduates   = seed_port.nlargest(n_grad, 'exit_val_m').reset_index(drop=True)
 
     raw    = np.exp(rng.uniform(np.log(growth_cfg.check_min_m),
-                                np.log(growth_cfg.check_max_m), size=n))
+                                np.log(growth_cfg.check_max_m), size=n_grad))
     checks = raw / raw.sum() * initial_cap
-    grad_checks, co_checks = checks[:n_grad], checks[n_grad:]
 
     rows = []
     for i in range(n_grad):
         row   = graduates.iloc[i]
-        check = grad_checks[i]
+        check = checks[i]
         rem   = max(0.0, row['dilutive_rounds'] - 1.0)
         dil_own  = (check / growth_cfg.entry_post_money_m) * (1 - growth_cfg.dilution_per_round) ** rem
         proceeds = dil_own * row['exit_val_m']
@@ -243,33 +245,6 @@ def simulate_followon_portfolio(seed_port, seed_cfg, growth_cfg, seed=None):
             initial_check=check, follow_on=0.0, total_invested=check,
             gross_proceeds=proceeds, multiple=proceeds / check if check > 0 else 0.0,
         ))
-
-    if n_co > 0:
-        probs = np.array([b.prob for b in growth_cfg.outcome_buckets], dtype=float)
-        probs /= probs.sum()
-        bidx = rng.choice(len(growth_cfg.outcome_buckets), size=n_co, p=probs)
-        for j in range(n_co):
-            b     = growth_cfg.outcome_buckets[bidx[j]]
-            check = co_checks[j]
-            if b.exit_val_hi_m == 0:
-                ev = rounds = 0.0
-            else:
-                lo    = max(b.exit_val_lo_m, 0.1)
-                ev    = np.exp(rng.uniform(np.log(lo), np.log(b.exit_val_hi_m)))
-                rounds = max(0.0, rng.normal(b.avg_dilutive_rounds, 0.5))
-            dil_own  = (check / growth_cfg.entry_post_money_m) * (1 - growth_cfg.dilution_per_round) ** rounds
-            proceeds = dil_own * ev
-            inv_yr   = rng.uniform(0.5, float(growth_cfg.invest_period_yrs))
-            hold     = np.clip(rng.normal(growth_cfg.avg_hold_yrs, growth_cfg.std_hold_yrs),
-                               2.0, float(growth_cfg.fund_life_yrs - 1))
-            exit_yr  = np.clip(inv_yr + hold, 1.0, float(growth_cfg.fund_life_yrs))
-            rows.append(dict(
-                company=f'CoInv-{j+1:02d}', outcome=b.label, source='co_investment',
-                exit_val_m=ev, dilutive_rounds=rounds, diluted_own_pct=dil_own * 100,
-                inv_year=inv_yr, exit_year=exit_yr, initial_check=check, follow_on=0.0,
-                total_invested=check, gross_proceeds=proceeds,
-                multiple=proceeds / check if check > 0 else 0.0,
-            ))
 
     port = pd.DataFrame(rows)
     company_rank = port['exit_val_m'] + rng.uniform(0, 1, len(port))
@@ -448,18 +423,18 @@ def get_overview(s_fund_size, s_entry, s_n_inv, s_reserve_pct, s_chk_min, s_chk_
 
     src = (
         growth_r['portfolio']
-        .groupby('source')
+        .groupby('outcome')
         .agg(n=('company', 'count'),
              avg_check=('initial_check', 'mean'),
              invested=('total_invested', 'sum'),
              proceeds=('gross_proceeds', 'sum'))
         .assign(moic=lambda d: (d['proceeds'] / d['invested'].replace(0, np.nan)).round(2))
+        .sort_values('proceeds', ascending=False)
         .round(2)
         .reset_index()
     )
 
-    n_grad     = int((growth_r['portfolio']['source'] == 'seed_graduate').sum())
-    n_co       = int((growth_r['portfolio']['source'] == 'co_investment').sum())
+    n_grad      = int((growth_r['portfolio']['source'] == 'seed_graduate').sum())
     n_writeoffs = int((seed_r['portfolio']['outcome'] == 'Total Loss').sum())
 
     return json.dumps({
@@ -473,7 +448,6 @@ def get_overview(s_fund_size, s_entry, s_n_inv, s_reserve_pct, s_chk_min, s_chk_
             'gross_moic': round(float(mg['gross_moic']), 2),
             'dpi':        round(mg['dpi'], 2),
             'n_grad': n_grad,
-            'n_co': n_co,
         },
         'combined': {
             'moic':            round(total_proceeds / total_committed, 2),

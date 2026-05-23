@@ -177,16 +177,16 @@
       padding: 0.3rem 0;
       font-size: 0.73rem;
       font-weight: 600;
-      background: rgba(255,255,255,0.12);
+      background: rgba(255, 255, 255, 0.12);
       color: white;
-      border: 1px solid rgba(255,255,255,0.25);
+      border: 1px solid rgba(255, 255, 255, 0.25);
       border-radius: 4px;
       cursor: pointer;
       transition: background 0.15s;
     }
 
     .preset-btn:hover {
-      background: rgba(255,255,255,0.22);
+      background: rgba(255, 255, 255, 0.22);
     }
 
     .bucket-table {
@@ -224,9 +224,9 @@
       width: 44px;
       padding: 1px 3px;
       font-size: 0.68rem;
-      background: rgba(255,255,255,0.1);
+      background: rgba(255, 255, 255, 0.1);
       color: white;
-      border: 1px solid rgba(255,255,255,0.2);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 3px;
       text-align: center;
     }
@@ -623,7 +623,6 @@
     <!-- Sidebar -->
     <aside id="sidebar">
       <h1>📈 VC Fund Model</h1>
-      <div class="subtitle">AI · 2026 · WebAssembly</div>
 
       <div class="section-label">Seed Fund I</div>
       <div class="control">
@@ -857,6 +856,7 @@
             Monte Carlo runs automatically when you change any parameter. Results update in 3–8 seconds depending on
             simulation count.
           </div>
+          <div style="font-size:0.7rem;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.2rem;">IRR</div>
           <div class="stat-row" id="mc-stats">
             <div class="stat-pill">
               <div class="s-val" id="mc-p10">—</div>
@@ -883,6 +883,52 @@
               <div class="s-lbl">% Positive</div>
             </div>
           </div>
+          <div style="font-size:0.7rem;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.05em;margin:0.6rem 0 0.2rem;">TVPI</div>
+          <div class="stat-row">
+            <div class="stat-pill">
+              <div class="s-val" id="mc-tvpi-p10">—</div>
+              <div class="s-lbl">P10 TVPI</div>
+            </div>
+            <div class="stat-pill">
+              <div class="s-val" id="mc-tvpi-p25">—</div>
+              <div class="s-lbl">P25 TVPI</div>
+            </div>
+            <div class="stat-pill">
+              <div class="s-val green" id="mc-tvpi-med">—</div>
+              <div class="s-lbl">Median TVPI</div>
+            </div>
+            <div class="stat-pill">
+              <div class="s-val" id="mc-tvpi-p75">—</div>
+              <div class="s-lbl">P75 TVPI</div>
+            </div>
+            <div class="stat-pill">
+              <div class="s-val" id="mc-tvpi-p90">—</div>
+              <div class="s-lbl">P90 TVPI</div>
+            </div>
+          </div>
+          <div style="font-size:0.7rem;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.05em;margin:0.6rem 0 0.2rem;">DPI</div>
+          <div class="stat-row">
+            <div class="stat-pill">
+              <div class="s-val" id="mc-dpi-p10">—</div>
+              <div class="s-lbl">P10 DPI</div>
+            </div>
+            <div class="stat-pill">
+              <div class="s-val" id="mc-dpi-p25">—</div>
+              <div class="s-lbl">P25 DPI</div>
+            </div>
+            <div class="stat-pill">
+              <div class="s-val green" id="mc-dpi-med">—</div>
+              <div class="s-lbl">Median DPI</div>
+            </div>
+            <div class="stat-pill">
+              <div class="s-val" id="mc-dpi-p75">—</div>
+              <div class="s-lbl">P75 DPI</div>
+            </div>
+            <div class="stat-pill">
+              <div class="s-val" id="mc-dpi-p90">—</div>
+              <div class="s-lbl">P90 DPI</div>
+            </div>
+          </div>
 
           <div class="chart-wrap" id="mc-wrap">
             <div class="chart-overlay" id="mc-loading">
@@ -897,45 +943,14 @@
                 <tr>
                   <th>Percentile</th>
                   <th>Gross IRR (%)</th>
+                  <th>TVPI (x)</th>
                   <th>DPI (x)</th>
-                  <th>Gross MOIC (x)</th>
                 </tr>
               </thead>
               <tbody></tbody>
             </table>
           </div>
         </div><!-- /mc -->
-
-        <!-- Sensitivity panel -->
-        <div class="panel" id="panel-sensitivity">
-          <div class="info-box">
-            Sweeps entry valuation $12M–$50M holding all other Seed Fund I parameters fixed.
-            Click <b>Run Entry Sensitivity</b> to compute (~10–20 seconds).
-          </div>
-          <button class="run-btn" id="run-sensitivity-btn">▶ Run Entry Sensitivity</button>
-
-          <div class="chart-wrap" id="sens-wrap">
-            <div class="chart-overlay" id="sens-loading" style="display:none">
-              <div class="spinner"></div>Computing sensitivity sweep…
-            </div>
-            <img id="sens-img" alt="Entry sensitivity" style="display:none">
-            <div id="sens-placeholder" style="padding:3rem;text-align:center;color:#9e9e9e;font-size:0.85rem;">
-              Click "Run Entry Sensitivity" to generate chart.
-            </div>
-          </div>
-
-          <div class="table-wrap" id="sens-table-wrap" style="display:none">
-            <table id="sens-table">
-              <thead>
-                <tr>
-                  <th>Entry ($M)</th><th>P10 IRR (%)</th><th>Median IRR (%)</th>
-                  <th>P90 IRR (%)</th><th>Median DPI (x)</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </div><!-- /sensitivity -->
 
         <!-- Optimizer panel -->
         <div class="panel" id="panel-optimizer">
@@ -944,7 +959,8 @@
             Check range auto-derives from avg check so each cell is self-consistent.
             Score&nbsp;=&nbsp;0.6×Median&nbsp;IRR&nbsp;+&nbsp;0.4×P10&nbsp;IRR.
             Entry valuation, follow-on reserve, and market scenario are set in the config below.
-            Sims per cell&nbsp;=&nbsp;MC&nbsp;sims&nbsp;÷&nbsp;3 (min&nbsp;50). Larger grids take longer — start with steps&nbsp;=&nbsp;7.
+            Sims per cell&nbsp;=&nbsp;MC&nbsp;sims&nbsp;÷&nbsp;3 (min&nbsp;50). Larger grids take longer — start with
+            steps&nbsp;=&nbsp;7.
           </div>
 
           <div class="opt-config">
@@ -1009,6 +1025,14 @@
                   <div class="label">P10 IRR</div>
                 </div>
                 <div class="metric-item">
+                  <div class="value green" id="opt-tvpi">—</div>
+                  <div class="label">Median TVPI</div>
+                </div>
+                <div class="metric-item">
+                  <div class="value green" id="opt-dpi">—</div>
+                  <div class="label">Median DPI</div>
+                </div>
+                <div class="metric-item">
                   <div class="value purple" id="opt-score">—</div>
                   <div class="label">Risk-adj score</div>
                 </div>
@@ -1049,6 +1073,7 @@
                     <th>Avg Check ($M)</th>
                     <th>Median IRR</th>
                     <th>P10 IRR</th>
+                    <th>Median TVPI</th>
                     <th>Median DPI</th>
                     <th>Score</th>
                   </tr>
@@ -1078,28 +1103,28 @@
     // ── Outcome bucket presets ────────────────────────────────────────────────────
     const BUCKET_PRESETS = {
       base: [
-        {label:'Total Loss',   prob:17, exit_val_lo_m:0,    exit_val_hi_m:0,     avg_dilutive_rounds:0.0},
-        {label:'Small Return', prob:31, exit_val_lo_m:2,    exit_val_hi_m:50,    avg_dilutive_rounds:0.5},
-        {label:'Mid Return',   prob:27, exit_val_lo_m:50,   exit_val_hi_m:400,   avg_dilutive_rounds:2.0},
-        {label:'Outsize',      prob:13, exit_val_lo_m:400,  exit_val_hi_m:2000,  avg_dilutive_rounds:3.0},
-        {label:'Outlier',      prob:6,  exit_val_lo_m:2000, exit_val_hi_m:10000, avg_dilutive_rounds:4.0},
+        { label: 'Total Loss', prob: 17, exit_val_lo_m: 0, exit_val_hi_m: 0, avg_dilutive_rounds: 0.0 },
+        { label: 'Small Return', prob: 31, exit_val_lo_m: 2, exit_val_hi_m: 50, avg_dilutive_rounds: 0.5 },
+        { label: 'Mid Return', prob: 27, exit_val_lo_m: 50, exit_val_hi_m: 400, avg_dilutive_rounds: 2.0 },
+        { label: 'Outsize', prob: 13, exit_val_lo_m: 400, exit_val_hi_m: 2000, avg_dilutive_rounds: 3.0 },
+        { label: 'Outlier', prob: 6, exit_val_lo_m: 2000, exit_val_hi_m: 10000, avg_dilutive_rounds: 4.0 },
       ],
       bear: [
-        {label:'Total Loss',   prob:28, exit_val_lo_m:0,    exit_val_hi_m:0,     avg_dilutive_rounds:0.0},
-        {label:'Small Return', prob:33, exit_val_lo_m:2,    exit_val_hi_m:40,    avg_dilutive_rounds:0.5},
-        {label:'Mid Return',   prob:24, exit_val_lo_m:40,   exit_val_hi_m:250,   avg_dilutive_rounds:2.0},
-        {label:'Outsize',      prob:12, exit_val_lo_m:250,  exit_val_hi_m:1000,  avg_dilutive_rounds:3.0},
-        {label:'Outlier',      prob:3,  exit_val_lo_m:1000, exit_val_hi_m:5000,  avg_dilutive_rounds:4.0},
+        { label: 'Total Loss', prob: 28, exit_val_lo_m: 0, exit_val_hi_m: 0, avg_dilutive_rounds: 0.0 },
+        { label: 'Small Return', prob: 33, exit_val_lo_m: 2, exit_val_hi_m: 40, avg_dilutive_rounds: 0.5 },
+        { label: 'Mid Return', prob: 24, exit_val_lo_m: 40, exit_val_hi_m: 250, avg_dilutive_rounds: 2.0 },
+        { label: 'Outsize', prob: 12, exit_val_lo_m: 250, exit_val_hi_m: 1000, avg_dilutive_rounds: 3.0 },
+        { label: 'Outlier', prob: 3, exit_val_lo_m: 1000, exit_val_hi_m: 5000, avg_dilutive_rounds: 4.0 },
       ],
     };
 
-    const BUCKET_LABELS = ['Total Loss','Small Return','Mid Return','Outsize','Outlier'];
+    const BUCKET_LABELS = ['Total Loss', 'Small Return', 'Mid Return', 'Outsize', 'Outlier'];
 
     function setBuckets(presetName) {
       BUCKET_PRESETS[presetName].forEach((b, i) => {
-        $(`bkt-${i}-prob`).value   = b.prob;
-        $(`bkt-${i}-lo`).value     = b.exit_val_lo_m;
-        $(`bkt-${i}-hi`).value     = b.exit_val_hi_m;
+        $(`bkt-${i}-prob`).value = b.prob;
+        $(`bkt-${i}-lo`).value = b.exit_val_lo_m;
+        $(`bkt-${i}-hi`).value = b.exit_val_hi_m;
         $(`bkt-${i}-rounds`).value = b.avg_dilutive_rounds;
       });
       validateBucketSum();
@@ -1107,16 +1132,16 @@
     }
 
     function validateBucketSum() {
-      const total = [0,1,2,3,4].reduce((s, i) => s + (+$(`bkt-${i}-prob`).value || 0), 0);
+      const total = [0, 1, 2, 3, 4].reduce((s, i) => s + (+$(`bkt-${i}-prob`).value || 0), 0);
       $('bucket-sum-warn').style.display = Math.abs(total - 100) > 0.5 ? '' : 'none';
     }
 
     function readBuckets() {
-      return JSON.stringify([0,1,2,3,4].map(i => ({
-        label:               BUCKET_LABELS[i],
-        prob:                (+$(`bkt-${i}-prob`).value) / 100,
-        exit_val_lo_m:       +$(`bkt-${i}-lo`).value,
-        exit_val_hi_m:       +$(`bkt-${i}-hi`).value,
+      return JSON.stringify([0, 1, 2, 3, 4].map(i => ({
+        label: BUCKET_LABELS[i],
+        prob: (+$(`bkt-${i}-prob`).value) / 100,
+        exit_val_lo_m: +$(`bkt-${i}-lo`).value,
+        exit_val_hi_m: +$(`bkt-${i}-hi`).value,
         avg_dilutive_rounds: +$(`bkt-${i}-rounds`).value,
       })));
     }
@@ -1233,17 +1258,11 @@
         $(id).addEventListener('input', onParamChange);
       });
     // Bucket probability inputs: validate sum + rerun
-    [0,1,2,3,4].forEach(i => {
+    [0, 1, 2, 3, 4].forEach(i => {
       $(`bkt-${i}-prob`).addEventListener('input', () => { validateBucketSum(); onParamChange(); });
       $(`bkt-${i}-lo`).addEventListener('input', onParamChange);
       $(`bkt-${i}-hi`).addEventListener('input', onParamChange);
       $(`bkt-${i}-rounds`).addEventListener('input', onParamChange);
-    });
-
-    // ── Run sensitivity button ────────────────────────────────────────────────────
-    $('run-sensitivity-btn').addEventListener('click', () => {
-      if (!isReady) return;
-      triggerRun('sensitivity');
     });
 
     // ── Run optimizer button ──────────────────────────────────────────────────────
@@ -1269,8 +1288,6 @@
           await runOverview(p);
         } else if (tab === 'mc') {
           await runMC(p);
-        } else if (tab === 'sensitivity') {
-          await runSensitivity(p);
         } else if (tab === 'optimizer') {
           await runOptimizer(p);
         }
@@ -1343,54 +1360,29 @@
       $('mc-p90').textContent = `${d.stats.p90}%`;
       $('mc-pos').textContent = `${d.stats.pct_positive}%`;
 
+      const pct = d.percentiles;
+      $('mc-tvpi-p10').textContent = `${pct.P10.moic}x`;
+      $('mc-tvpi-p25').textContent = `${pct.P25.moic}x`;
+      $('mc-tvpi-med').textContent = `${pct.P50.moic}x`;
+      $('mc-tvpi-p75').textContent = `${pct.P75.moic}x`;
+      $('mc-tvpi-p90').textContent = `${pct.P90.moic}x`;
+      $('mc-dpi-p10').textContent  = `${pct.P10.dpi}x`;
+      $('mc-dpi-p25').textContent  = `${pct.P25.dpi}x`;
+      $('mc-dpi-med').textContent  = `${pct.P50.dpi}x`;
+      $('mc-dpi-p75').textContent  = `${pct.P75.dpi}x`;
+      $('mc-dpi-p90').textContent  = `${pct.P90.dpi}x`;
+
       $('mc-img').src = `data:image/png;base64,${d.chart}`;
       $('mc-img').style.display = 'block';
       showOverlay('mc-loading', false);
 
       const tbody = document.querySelector('#pct-table tbody');
       tbody.innerHTML = '';
-      for (const [pct, vals] of Object.entries(d.percentiles)) {
+      for (const [p, vals] of Object.entries(d.percentiles)) {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><b>${pct}</b></td><td>${vals.irr}%</td><td>${vals.dpi}x</td><td>${vals.moic}x</td>`;
+        tr.innerHTML = `<td><b>${p}</b></td><td>${vals.irr}%</td><td>${vals.moic}x</td><td>${vals.dpi}x</td>`;
         tbody.appendChild(tr);
       }
-    }
-
-    // ── Sensitivity ───────────────────────────────────────────────────────────────
-    async function runSensitivity(p) {
-      $('run-sensitivity-btn').disabled = true;
-      $('sens-img').style.display = 'none';
-      $('sens-placeholder').style.display = 'none';
-      $('sens-table-wrap').style.display = 'none';
-      $('sens-loading').style.display = 'flex';
-      await tick();
-
-      const fn = pyodide.globals.get('get_sensitivity');
-      const nSimsSens = Math.max(50, Math.floor(p.nSims / 3));
-      const raw = fn(
-        p.sFundSize, p.sNinv, p.sResPct, p.sChkMin, p.sChkMax,
-        p.bucketsJson, nSimsSens, p.sEntry
-      );
-      const d = JSON.parse(raw);
-
-      $('sens-img').src = `data:image/png;base64,${d.chart}`;
-      $('sens-img').style.display = 'block';
-      $('sens-loading').style.display = 'none';
-      $('sens-table-wrap').style.display = 'block';
-
-      const tbody = document.querySelector('#sens-table tbody');
-      tbody.innerHTML = '';
-      d.table.forEach(row => {
-        const tr = document.createElement('tr');
-        const isCurrentEntry = Math.abs(row.entry_m - p.sEntry) < 2;
-        if (isCurrentEntry) tr.style.background = '#e8f5e9';
-        tr.innerHTML = `<td>${isCurrentEntry ? '▶ ' : ''}$${row.entry_m}M</td>` +
-          `<td>${row.irr_p10}%</td><td><b>${row.irr_median}%</b></td>` +
-          `<td>${row.irr_p90}%</td><td>${row.dpi}x</td>`;
-        tbody.appendChild(tr);
-      });
-
-      $('run-sensitivity-btn').disabled = false;
     }
 
     // ── Table renderer ────────────────────────────────────────────────────────────
@@ -1420,16 +1412,16 @@
       await tick();
 
       const fn = pyodide.globals.get('get_optimizer');
-      const nSimsOpt  = Math.max(50, Math.floor(p.nSims / 3));
-      const fsMin     = parseFloat($('opt-fs-min').value)  || 75;
-      const fsMax     = parseFloat($('opt-fs-max').value)  || 250;
-      const niMin     = parseInt($('opt-ni-min').value)    || 10;
-      const niMax     = parseInt($('opt-ni-max').value)    || 70;
-      const optEntry  = parseFloat($('opt-entry').value)   || 27.5;
-      const optReserve= parseInt($('opt-reserve').value);   // 0 is valid
-      const nSteps    = parseInt($('opt-steps').value)     || 7;
+      const nSimsOpt = Math.max(50, Math.floor(p.nSims / 3));
+      const fsMin = parseFloat($('opt-fs-min').value) || 75;
+      const fsMax = parseFloat($('opt-fs-max').value) || 250;
+      const niMin = parseInt($('opt-ni-min').value) || 10;
+      const niMax = parseInt($('opt-ni-max').value) || 70;
+      const optEntry = parseFloat($('opt-entry').value) || 27.5;
+      const optReserve = parseInt($('opt-reserve').value);   // 0 is valid
+      const nSteps = parseInt($('opt-steps').value) || 7;
       const raw = fn(optEntry, isNaN(optReserve) ? 10 : optReserve,
-                     p.bucketsJson, nSimsOpt, fsMin, fsMax, niMin, niMax, nSteps);
+        p.bucketsJson, nSimsOpt, fsMin, fsMax, niMin, niMax, nSteps);
       const d = JSON.parse(raw);
 
       // Optimal config card
@@ -1437,10 +1429,12 @@
       $('opt-fund-size').textContent = `$${b.fund_size}M`;
       $('opt-n-inv').textContent = `${b.n_inv} cos`;
       $('opt-avg-check').textContent = `$${b.avg_check}M`;
-      $('opt-irr-med').textContent      = `${b.irr_median}%`;
-      $('opt-irr-p10').textContent      = `${b.irr_p10}%`;
-      $('opt-score').textContent        = b.score.toFixed(1);
-      $('opt-used-entry').textContent   = `$${optEntry}M`;
+      $('opt-irr-med').textContent = `${b.irr_median}%`;
+      $('opt-irr-p10').textContent = `${b.irr_p10}%`;
+      $('opt-tvpi').textContent    = `${b.moic_median}x`;
+      $('opt-dpi').textContent     = `${b.dpi_median}x`;
+      $('opt-score').textContent = b.score.toFixed(1);
+      $('opt-used-entry').textContent = `$${optEntry}M`;
       $('opt-used-reserve').textContent = `${isNaN(optReserve) ? 10 : optReserve}%`;
       $('opt-best-card').style.display = 'block';
 
@@ -1471,6 +1465,7 @@
           `<td>$${r.avg_check}M</td>` +
           `<td>${r.irr_median}%</td>` +
           `<td>${r.irr_p10}%</td>` +
+          `<td>${r.moic_median}x</td>` +
           `<td>${r.dpi_median}x</td>` +
           `<td><b>${r.score}</b></td>`;
         tbody.appendChild(tr);

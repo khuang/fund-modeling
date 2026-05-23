@@ -573,20 +573,20 @@ def get_sensitivity(s_fund_size, s_n_inv, s_reserve_pct, s_chk_min, s_chk_max,
     return json.dumps({'chart': chart_b64, 'table': table})
 
 
-def _plot_optimizer_heatmaps(irr_mat, p10_mat, score_mat,
+def _plot_optimizer_heatmaps(irr_mat, p10_mat, score_mat, moic_mat,
                               x_labels, y_labels, best_ri, best_ci):
     n_rows, n_cols = irr_mat.shape
-    # Scale figure so cells stay readable as grid grows
     cell_px = max(1.1, 7.0 / max(n_cols, 1))
-    figw    = min(28, max(18, n_cols * cell_px * 3 + 4))
-    figh    = min(14, max(4,  n_rows * max(0.55, 3.5 / max(n_rows, 1)) + 2))
-    fig, axes = plt.subplots(1, 3, figsize=(figw, figh))
+    half_w  = min(16, max(10, n_cols * cell_px * 2 + 3))
+    half_h  = min(10, max(3,  n_rows * max(0.55, 3.5 / max(n_rows, 1)) + 2))
+    fig, axes = plt.subplots(2, 2, figsize=(half_w * 2, half_h * 2))
     ann_fs  = max(6, min(9, int(65 / max(n_rows, n_cols, 1))))
 
     specs = [
-        (irr_mat,   'Median Gross IRR (%)',                     'YlGn',   axes[0], '.0f', '%'),
-        (p10_mat,   'P10 Gross IRR (%)  ← downside',           'RdYlGn', axes[1], '.0f', '%'),
-        (score_mat, 'Risk-Adj Score\n(0.6×Median + 0.4×P10)',  'Blues',  axes[2], '.0f', ''),
+        (irr_mat,   'Median Gross IRR (%)',                    'YlGn',   axes[0][0], '.0f', '%'),
+        (p10_mat,   'P10 Gross IRR (%)  ← downside',          'RdYlGn', axes[0][1], '.0f', '%'),
+        (moic_mat,  'Median TVPI (x)',                         'YlOrRd', axes[1][0], '.2f', 'x'),
+        (score_mat, 'Risk-Adj Score\n(0.6×Median + 0.4×P10)', 'Blues',  axes[1][1], '.0f', ''),
     ]
     for mat, title, cmap, ax, fmt, suffix in specs:
         masked = np.ma.masked_invalid(mat)
@@ -626,7 +626,7 @@ def _plot_optimizer_heatmaps(irr_mat, p10_mat, score_mat,
         'Portfolio Optimizer — Fund Size × # Investments\n'
         '(red border = highest risk-adjusted score)',
         fontsize=12, fontweight='bold')
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
     return _fig_to_b64(fig)
 
 
@@ -821,6 +821,7 @@ def get_optimizer(entry_val, reserve_pct, buckets_json, n_sims,
     irr_mat   = np.full((n_r, n_c), np.nan)
     p10_mat   = np.full((n_r, n_c), np.nan)
     score_mat = np.full((n_r, n_c), np.nan)
+    moic_mat  = np.full((n_r, n_c), np.nan)
 
     for r in rows:
         ri = N_INV_LIST.index(r['n_inv'])
@@ -828,6 +829,7 @@ def get_optimizer(entry_val, reserve_pct, buckets_json, n_sims,
         irr_mat[ri, ci]   = r['irr_median']
         p10_mat[ri, ci]   = r['irr_p10']
         score_mat[ri, ci] = r['score']
+        moic_mat[ri, ci]  = r['moic_median']
 
     x_labels = [f'${f}M' for f in FUND_SIZES]
     y_labels = [f'{n}' for n in N_INV_LIST]
@@ -835,7 +837,7 @@ def get_optimizer(entry_val, reserve_pct, buckets_json, n_sims,
     best_ci  = FUND_SIZES.index(best['fund_size'])
 
     heatmap_b64   = _plot_optimizer_heatmaps(
-        irr_mat, p10_mat, score_mat, x_labels, y_labels, best_ri, best_ci)
+        irr_mat, p10_mat, score_mat, moic_mat, x_labels, y_labels, best_ri, best_ci)
     pareto_b64    = _plot_pareto(rows, best, FUND_SIZES)
     boxwhisk_b64  = _plot_boxwhisker(irr_dist, FUND_SIZES, N_INV_LIST, best)
 
@@ -848,4 +850,4 @@ def get_optimizer(entry_val, reserve_pct, buckets_json, n_sims,
     })
 
 
-print('VC Fund Model loaded. Functions available: get_overview, get_mc, get_sensitivity, get_optimizer')
+print('VC Fund Model loaded. Functions available: get_overview, get_mc, get_optimizer')

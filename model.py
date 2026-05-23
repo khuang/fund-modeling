@@ -568,11 +568,18 @@ def get_sensitivity(s_fund_size, s_n_inv, s_reserve_pct, s_chk_min, s_chk_max,
 
 def _plot_optimizer_heatmaps(irr_mat, p10_mat, score_mat,
                               x_labels, y_labels, best_ri, best_ci):
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    n_rows, n_cols = irr_mat.shape
+    # Scale figure so cells stay readable as grid grows
+    cell_px = max(1.1, 7.0 / max(n_cols, 1))
+    figw    = min(28, max(18, n_cols * cell_px * 3 + 4))
+    figh    = min(14, max(4,  n_rows * max(0.55, 3.5 / max(n_rows, 1)) + 2))
+    fig, axes = plt.subplots(1, 3, figsize=(figw, figh))
+    ann_fs  = max(6, min(9, int(65 / max(n_rows, n_cols, 1))))
+
     specs = [
-        (irr_mat,   'Median Gross IRR (%)',                     'YlGn',   axes[0], '.1f', '%'),
-        (p10_mat,   'P10 Gross IRR (%)  ← downside',           'RdYlGn', axes[1], '.1f', '%'),
-        (score_mat, 'Risk-Adj Score\n(0.6×Median + 0.4×P10)',  'Blues',  axes[2], '.1f', ''),
+        (irr_mat,   'Median Gross IRR (%)',                     'YlGn',   axes[0], '.0f', '%'),
+        (p10_mat,   'P10 Gross IRR (%)  ← downside',           'RdYlGn', axes[1], '.0f', '%'),
+        (score_mat, 'Risk-Adj Score\n(0.6×Median + 0.4×P10)',  'Blues',  axes[2], '.0f', ''),
     ]
     for mat, title, cmap, ax, fmt, suffix in specs:
         masked = np.ma.masked_invalid(mat)
@@ -580,11 +587,13 @@ def _plot_optimizer_heatmaps(irr_mat, p10_mat, score_mat,
 
         ax.set_xticks(np.arange(-0.5, mat.shape[1], 1), minor=True)
         ax.set_yticks(np.arange(-0.5, mat.shape[0], 1), minor=True)
-        ax.grid(which='minor', color='white', linewidth=2)
+        ax.grid(which='minor', color='white', linewidth=1.5)
         ax.tick_params(which='minor', size=0)
 
-        ax.set_xticks(range(len(x_labels))); ax.set_xticklabels(x_labels, fontsize=9)
-        ax.set_yticks(range(len(y_labels))); ax.set_yticklabels(y_labels, fontsize=9)
+        ax.set_xticks(range(len(x_labels)))
+        ax.set_xticklabels(x_labels, fontsize=max(7, 10 - n_cols // 3), rotation=30, ha='right')
+        ax.set_yticks(range(len(y_labels)))
+        ax.set_yticklabels(y_labels, fontsize=max(7, 10 - n_rows // 3))
         ax.set_xlabel('Fund Size', fontsize=9)
         ax.set_ylabel('# Investments', fontsize=9)
         ax.set_title(title, fontweight='bold', fontsize=10, pad=8)
@@ -597,8 +606,9 @@ def _plot_optimizer_heatmaps(irr_mat, p10_mat, score_mat,
                     continue
                 norm = (v - vmin) / (vmax - vmin) if vmax > vmin else 0.5
                 text_color = 'white' if norm > 0.60 else '#222'
-                ax.text(j, i, f'{v:{fmt[1:]}}{suffix}',
-                        ha='center', va='center', fontsize=8.5, color=text_color)
+                ax.text(j, i, f'{v:{fmt}}{suffix}',
+                        ha='center', va='center', fontsize=ann_fs,
+                        color=text_color, clip_on=True)
 
         rect = plt.Rectangle((best_ci - 0.5, best_ri - 0.5), 1, 1,
                               linewidth=3, edgecolor='red', facecolor='none', zorder=6)
@@ -608,6 +618,66 @@ def _plot_optimizer_heatmaps(irr_mat, p10_mat, score_mat,
     plt.suptitle(
         'Portfolio Optimizer — Fund Size × # Investments\n'
         '(red border = highest risk-adjusted score)',
+        fontsize=12, fontweight='bold')
+    plt.tight_layout()
+    return _fig_to_b64(fig)
+
+
+def _plot_boxwhisker(irr_dist, fund_sizes, n_inv_list, best):
+    blue    = '#1a237e'
+    red_col = '#c62828'
+    light   = '#e8eaf6'
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5), facecolor='white')
+    best_fs = best['fund_size']
+    best_ni = best['n_inv']
+
+    # ── Panel 1: by fund size (pool across all n_inv) ────────────────────────
+    fs_data = [[v for ni in n_inv_list for v in irr_dist.get((fs, ni), [])]
+               for fs in fund_sizes]
+    bp1 = ax1.boxplot(fs_data, labels=[f'${fs}M' for fs in fund_sizes],
+                      patch_artist=True,
+                      medianprops=dict(color=red_col, linewidth=2),
+                      whiskerprops=dict(linewidth=1.2, color='#555'),
+                      capprops=dict(linewidth=1.2, color='#555'),
+                      flierprops=dict(marker='.', markersize=3, alpha=0.35, color='#999'))
+    for patch, fs in zip(bp1['boxes'], fund_sizes):
+        patch.set_facecolor(red_col if fs == best_fs else light)
+        patch.set_edgecolor(blue)
+        patch.set_alpha(0.85 if fs == best_fs else 0.65)
+    ax1.axhline(0, color='#9e9e9e', linewidth=0.8, linestyle='--')
+    ax1.set_title('IRR Distribution by Fund Size\n(all portfolio sizes pooled)',
+                  fontweight='bold', fontsize=10)
+    ax1.set_xlabel('Fund Size'); ax1.set_ylabel('Gross IRR (%)')
+    ax1.tick_params(axis='x', rotation=30)
+    for lbl in ax1.get_xticklabels():
+        if lbl.get_text() == f'${best_fs}M':
+            lbl.set_color(red_col); lbl.set_fontweight('bold')
+
+    # ── Panel 2: by # investments (pool across all fund sizes) ───────────────
+    ni_data = [[v for fs in fund_sizes for v in irr_dist.get((fs, ni), [])]
+               for ni in n_inv_list]
+    bp2 = ax2.boxplot(ni_data, labels=[str(ni) for ni in n_inv_list],
+                      patch_artist=True,
+                      medianprops=dict(color=red_col, linewidth=2),
+                      whiskerprops=dict(linewidth=1.2, color='#555'),
+                      capprops=dict(linewidth=1.2, color='#555'),
+                      flierprops=dict(marker='.', markersize=3, alpha=0.35, color='#999'))
+    for patch, ni in zip(bp2['boxes'], n_inv_list):
+        patch.set_facecolor(red_col if ni == best_ni else light)
+        patch.set_edgecolor(blue)
+        patch.set_alpha(0.85 if ni == best_ni else 0.65)
+    ax2.axhline(0, color='#9e9e9e', linewidth=0.8, linestyle='--')
+    ax2.set_title('IRR Distribution by # Investments\n(all fund sizes pooled)',
+                  fontweight='bold', fontsize=10)
+    ax2.set_xlabel('# Investments'); ax2.set_ylabel('Gross IRR (%)')
+    for lbl in ax2.get_xticklabels():
+        if lbl.get_text() == str(best_ni):
+            lbl.set_color(red_col); lbl.set_fontweight('bold')
+
+    plt.suptitle(
+        'Portfolio Construction — Return Distributions\n'
+        '(red box = dimension of optimal configuration; red line = median)',
         fontsize=12, fontweight='bold')
     plt.tight_layout()
     return _fig_to_b64(fig)
@@ -659,27 +729,31 @@ def _plot_pareto(rows, best, fund_sizes):
 
 
 def get_optimizer(entry_val, reserve_pct, buckets_key, n_sims,
-                  fs_min=75, fs_max=250, ni_min=10, ni_max=70):
+                  fs_min=75, fs_max=250, ni_min=10, ni_max=70, n_steps=7):
     """Grid search over fund_size × n_investments.
 
     Check range is derived from avg_check (min = 0.5×, max = 2×) so the
     construction is self-consistent as the grid varies.
     Score = 0.6 × median_irr + 0.4 × P10_irr  (risk-adjusted return).
-    Returns JSON with best config, full results table, and two charts.
+    Returns JSON with best config, full results table, and charts.
     """
-    fs_min = max(25,  int(fs_min)); fs_max = max(fs_min + 25, int(fs_max))
-    ni_min = max(5,   int(ni_min)); ni_max = max(ni_min + 1,  int(ni_max))
+    fs_min  = max(25,  int(fs_min)); fs_max = max(fs_min + 5, int(fs_max))
+    ni_min  = max(5,   int(ni_min)); ni_max = max(ni_min + 1, int(ni_max))
+    n_steps = max(3, min(20, int(n_steps)))
 
-    FUND_SIZES = sorted(set(int(round(v / 25) * 25)
-                            for v in np.linspace(fs_min, fs_max, 7)))
+    # Round fund sizes to nearest $5M; geomspace for n_inv to spread low end
+    FUND_SIZES = sorted(set(int(round(v / 5) * 5)
+                            for v in np.linspace(fs_min, fs_max, n_steps)))
     N_INV_LIST = sorted(set(max(5, int(round(v)))
-                            for v in np.geomspace(ni_min, ni_max, 7)))
+                            for v in np.geomspace(ni_min, ni_max, n_steps)))
 
     bkts     = BASE_BUCKETS if buckets_key == 'base' else BEAR_BUCKETS
     n_sims   = int(n_sims)
     res_frac = int(reserve_pct) / 100.0
 
-    rows = []
+    rows     = []
+    irr_dist = {}   # (fund_size, n_inv) -> list[float] for box plots
+
     for fund_size in FUND_SIZES:
         for n_inv in N_INV_LIST:
             deployed  = fund_size * 0.90
@@ -719,6 +793,7 @@ def get_optimizer(entry_val, reserve_pct, buckets_key, n_sims,
             moic_med = float(np.nanmedian(moic_list))
             score    = 0.6 * irr_med + 0.4 * irr_p10
 
+            irr_dist[(fund_size, n_inv)] = irr_list
             rows.append({
                 'fund_size':   fund_size,
                 'n_inv':       n_inv,
@@ -750,15 +825,17 @@ def get_optimizer(entry_val, reserve_pct, buckets_key, n_sims,
     best_ri  = N_INV_LIST.index(best['n_inv'])
     best_ci  = FUND_SIZES.index(best['fund_size'])
 
-    heatmap_b64 = _plot_optimizer_heatmaps(
+    heatmap_b64   = _plot_optimizer_heatmaps(
         irr_mat, p10_mat, score_mat, x_labels, y_labels, best_ri, best_ci)
-    pareto_b64  = _plot_pareto(rows, best, FUND_SIZES)
+    pareto_b64    = _plot_pareto(rows, best, FUND_SIZES)
+    boxwhisk_b64  = _plot_boxwhisker(irr_dist, FUND_SIZES, N_INV_LIST, best)
 
     return json.dumps({
-        'best':    best,
-        'results': rows,
-        'heatmap': heatmap_b64,
-        'pareto':  pareto_b64,
+        'best':       best,
+        'results':    rows,
+        'heatmap':    heatmap_b64,
+        'pareto':     pareto_b64,
+        'boxwhisker': boxwhisk_b64,
     })
 
 

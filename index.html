@@ -502,11 +502,11 @@
       <!-- Optimizer panel -->
       <div class="panel" id="panel-optimizer">
         <div class="info-box">
-          Grids up to <b>7 fund sizes × 7 portfolio sizes</b> from the search space below.
+          Grids <b>N fund sizes × N portfolio sizes</b> from the search space below (set Grid steps to control N, up to 20×20).
           Check range auto-derives from avg check so each cell is self-consistent.
-          Score&nbsp;=&nbsp;0.6×Median&nbsp;IRR&nbsp;+&nbsp;0.4×P10&nbsp;IRR (risk-adjusted return).
+          Score&nbsp;=&nbsp;0.6×Median&nbsp;IRR&nbsp;+&nbsp;0.4×P10&nbsp;IRR.
           Uses current <b>entry valuation</b> and <b>market scenario</b> from the sidebar.
-          Simulations per cell&nbsp;=&nbsp;MC&nbsp;sims&nbsp;÷&nbsp;3 (min&nbsp;50).
+          Sims per cell&nbsp;=&nbsp;MC&nbsp;sims&nbsp;÷&nbsp;3 (min&nbsp;50). Larger grids take longer — start with steps&nbsp;=&nbsp;7.
         </div>
 
         <div class="opt-config">
@@ -514,11 +514,11 @@
           <div class="opt-config-grid">
             <div class="opt-field">
               <label>Fund size min ($M)</label>
-              <input type="number" id="opt-fs-min" class="opt-input" value="75" min="25" max="1000" step="25">
+              <input type="number" id="opt-fs-min" class="opt-input" value="75" min="25" max="1000" step="5">
             </div>
             <div class="opt-field">
               <label>Fund size max ($M)</label>
-              <input type="number" id="opt-fs-max" class="opt-input" value="250" min="25" max="1000" step="25">
+              <input type="number" id="opt-fs-max" class="opt-input" value="250" min="25" max="1000" step="5">
             </div>
             <div class="opt-field">
               <label>Min # investments</label>
@@ -527,6 +527,10 @@
             <div class="opt-field">
               <label>Max # investments</label>
               <input type="number" id="opt-ni-max" class="opt-input" value="70" min="5" max="500" step="1">
+            </div>
+            <div class="opt-field">
+              <label>Grid steps (N per axis)</label>
+              <input type="number" id="opt-steps" class="opt-input" value="7" min="3" max="20" step="1">
             </div>
           </div>
         </div>
@@ -575,6 +579,10 @@
 
         <div class="chart-wrap" id="opt-pareto-wrap" style="display:none">
           <img id="opt-pareto-img" alt="Pareto frontier">
+        </div>
+
+        <div class="chart-wrap" id="opt-boxwhisk-wrap" style="display:none">
+          <img id="opt-boxwhisk-img" alt="Box and whisker distributions">
         </div>
 
         <div id="opt-table-wrap" style="display:none; margin-top:0.5rem;">
@@ -895,21 +903,23 @@ function renderTable(tableId, rows, cols) {
 // ── Optimizer ─────────────────────────────────────────────────────────────────
 async function runOptimizer(p) {
   $('run-optimizer-btn').disabled = true;
-  $('opt-best-card').style.display    = 'none';
-  $('opt-heatmap-wrap').style.display = 'block';
-  $('opt-pareto-wrap').style.display  = 'none';
-  $('opt-table-wrap').style.display   = 'none';
+  $('opt-best-card').style.display      = 'none';
+  $('opt-heatmap-wrap').style.display   = 'block';
+  $('opt-pareto-wrap').style.display    = 'none';
+  $('opt-boxwhisk-wrap').style.display  = 'none';
+  $('opt-table-wrap').style.display     = 'none';
   showOverlay('opt-heatmap-loading', true);
   $('opt-heatmap-img').style.opacity  = '0';
   await tick();
 
   const fn    = pyodide.globals.get('get_optimizer');
   const nSimsOpt = Math.max(50, Math.floor(p.nSims / 3));
-  const fsMin = parseFloat($('opt-fs-min').value) || 75;
-  const fsMax = parseFloat($('opt-fs-max').value) || 250;
-  const niMin = parseInt($('opt-ni-min').value)   || 10;
-  const niMax = parseInt($('opt-ni-max').value)   || 70;
-  const raw   = fn(p.sEntry, p.sResPct, p.bucketsKey, nSimsOpt, fsMin, fsMax, niMin, niMax);
+  const fsMin  = parseFloat($('opt-fs-min').value) || 75;
+  const fsMax  = parseFloat($('opt-fs-max').value) || 250;
+  const niMin  = parseInt($('opt-ni-min').value)   || 10;
+  const niMax  = parseInt($('opt-ni-max').value)   || 70;
+  const nSteps = parseInt($('opt-steps').value)    || 7;
+  const raw   = fn(p.sEntry, p.sResPct, p.bucketsKey, nSimsOpt, fsMin, fsMax, niMin, niMax, nSteps);
   const d     = JSON.parse(raw);
 
   // Optimal config card
@@ -930,6 +940,10 @@ async function runOptimizer(p) {
   // Pareto / scatter
   $('opt-pareto-img').src = `data:image/png;base64,${d.pareto}`;
   $('opt-pareto-wrap').style.display = 'block';
+
+  // Box & whisker
+  $('opt-boxwhisk-img').src = `data:image/png;base64,${d.boxwhisker}`;
+  $('opt-boxwhisk-wrap').style.display = 'block';
 
   // Results table — sorted by score descending
   const sorted = [...d.results].sort((a, b) => b.score - a.score);

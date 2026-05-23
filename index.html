@@ -228,6 +228,41 @@
     font-size: 0.78rem; color: #1565c0;
     margin-bottom: 1rem; line-height: 1.5;
   }
+
+  /* ── Sidebar number inputs ──────────────────────────────────────────────── */
+  .sidebar-input {
+    width: 100%; padding: 0.3rem 0.5rem;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 4px; color: white;
+    font-size: 0.78rem; outline: none;
+  }
+  .sidebar-input:focus { border-color: #64b5f6; background: rgba(255,255,255,0.18); }
+  .sidebar-input::-webkit-inner-spin-button,
+  .sidebar-input::-webkit-outer-spin-button { opacity: 0.5; filter: invert(1); }
+
+  /* ── Optimizer config section ───────────────────────────────────────────── */
+  .opt-config {
+    background: #f5f5f5; border-radius: 8px;
+    padding: 0.9rem 1rem; margin-bottom: 1rem;
+  }
+  .opt-config h4 {
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #757575; margin-bottom: 0.7rem;
+  }
+  .opt-config-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+  .opt-field label {
+    display: block; font-size: 0.72rem; color: #757575; margin-bottom: 0.25rem;
+  }
+  .opt-input {
+    width: 100%; padding: 0.35rem 0.5rem;
+    border: 1px solid #ddd; border-radius: 4px;
+    font-size: 0.82rem; outline: none;
+  }
+  .opt-input:focus { border-color: #1a237e; }
 </style>
 </head>
 <body>
@@ -268,12 +303,12 @@
       <input type="range" id="s-res" min="5" max="70" step="5" value="10">
     </div>
     <div class="control">
-      <label>Min check <span id="lbl-s-cmin">$2.0M</span></label>
-      <input type="range" id="s-cmin" min="0.25" max="5" step="0.25" value="2">
+      <label>Min check ($M) <span style="opacity:0.55;font-size:0.7rem">auto</span></label>
+      <input type="number" id="s-cmin" class="sidebar-input" min="0.1" max="50" step="0.1" value="2">
     </div>
     <div class="control">
-      <label>Max check <span id="lbl-s-cmax">$7.0M</span></label>
-      <input type="range" id="s-cmax" min="1" max="15" step="0.5" value="7">
+      <label>Max check ($M) <span style="opacity:0.55;font-size:0.7rem">auto</span></label>
+      <input type="number" id="s-cmax" class="sidebar-input" min="0.1" max="100" step="0.1" value="7">
     </div>
     <div class="param-hint" id="seed-hint"></div>
 
@@ -467,13 +502,35 @@
       <!-- Optimizer panel -->
       <div class="panel" id="panel-optimizer">
         <div class="info-box">
-          Grids <b>7 fund sizes</b> ($75M–$250M) × <b>7 portfolio sizes</b> (10–70 companies)
-          = 49 configurations. Check range auto-derives from avg check size so each cell
-          is self-consistent. Score&nbsp;=&nbsp;0.6×Median&nbsp;IRR&nbsp;+&nbsp;0.4×P10&nbsp;IRR
-          (risk-adjusted return). Uses current <b>entry valuation</b> and <b>market scenario</b>
-          from the sidebar. Simulations per cell&nbsp;=&nbsp;MC&nbsp;sims&nbsp;÷&nbsp;3
-          (min&nbsp;50).
+          Grids up to <b>7 fund sizes × 7 portfolio sizes</b> from the search space below.
+          Check range auto-derives from avg check so each cell is self-consistent.
+          Score&nbsp;=&nbsp;0.6×Median&nbsp;IRR&nbsp;+&nbsp;0.4×P10&nbsp;IRR (risk-adjusted return).
+          Uses current <b>entry valuation</b> and <b>market scenario</b> from the sidebar.
+          Simulations per cell&nbsp;=&nbsp;MC&nbsp;sims&nbsp;÷&nbsp;3 (min&nbsp;50).
         </div>
+
+        <div class="opt-config">
+          <h4>Search Space</h4>
+          <div class="opt-config-grid">
+            <div class="opt-field">
+              <label>Fund size min ($M)</label>
+              <input type="number" id="opt-fs-min" class="opt-input" value="75" min="25" max="1000" step="25">
+            </div>
+            <div class="opt-field">
+              <label>Fund size max ($M)</label>
+              <input type="number" id="opt-fs-max" class="opt-input" value="250" min="25" max="1000" step="25">
+            </div>
+            <div class="opt-field">
+              <label>Min # investments</label>
+              <input type="number" id="opt-ni-min" class="opt-input" value="10" min="5" max="500" step="1">
+            </div>
+            <div class="opt-field">
+              <label>Max # investments</label>
+              <input type="number" id="opt-ni-max" class="opt-input" value="70" min="5" max="500" step="1">
+            </div>
+          </div>
+        </div>
+
         <button class="run-btn" id="run-optimizer-btn">🔍 Run Portfolio Optimizer</button>
 
         <!-- Optimal config card -->
@@ -595,8 +652,6 @@ function updateLabelsAndHint(p) {
   $('lbl-s-entry').textContent = `$${p.sEntry}M`;
   $('lbl-s-ninv').textContent  = p.sNinv;
   $('lbl-s-res').textContent   = `${p.sResPct}%`;
-  $('lbl-s-cmin').textContent  = `$${p.sChkMin.toFixed(2)}M`;
-  $('lbl-s-cmax').textContent  = `$${p.sChkMax.toFixed(1)}M`;
   $('lbl-g-size').textContent  = `$${p.gFundSize}M`;
   $('lbl-g-entry').textContent = `$${p.gEntry}M`;
   $('lbl-g-ninv').textContent  = p.gNinv;
@@ -618,6 +673,18 @@ function updateLabelsAndHint(p) {
     `Seed $${p.sFundSize}M · ${p.sNinv} cos · $${p.sEntry}M entry  |  ` +
     `Growth $${p.gFundSize}M · ${p.gNinv} cos · $${p.gEntry}M entry  |  ` +
     `${p.nSims} sims · ${p.bucketsKey === 'bear' ? 'Bear market' : 'Base case'}`;
+}
+
+// ── Sync check range from structural params ───────────────────────────────────
+function syncCheckRange() {
+  const sFundSize = parseFloat($('s-size').value);
+  const sNinv     = parseInt($('s-ninv').value);
+  const sResPct   = parseInt($('s-res').value);
+  const deployed  = sFundSize * 0.90;
+  const initCap   = deployed * (1 - sResPct / 100);
+  const avgCheck  = initCap / sNinv;
+  $('s-cmin').value = Math.max(0.1, +(avgCheck * 0.5).toFixed(2));
+  $('s-cmax').value = +(avgCheck * 2.0).toFixed(2);
 }
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
@@ -645,7 +712,12 @@ function onParamChange() {
   debounce = setTimeout(() => triggerRun(activeTab), 450);
 }
 
-['s-size','s-entry','s-ninv','s-res','s-cmin','s-cmax',
+// Structural params that affect avg check size: auto-sync check range first
+['s-size','s-ninv','s-res'].forEach(id => {
+  $(id).addEventListener('input', () => { syncCheckRange(); onParamChange(); });
+});
+// All other params
+['s-entry','s-cmin','s-cmax',
  'g-size','g-entry','g-ninv','g-res','nsims'].forEach(id => {
   $(id).addEventListener('input', onParamChange);
 });
@@ -833,7 +905,11 @@ async function runOptimizer(p) {
 
   const fn    = pyodide.globals.get('get_optimizer');
   const nSimsOpt = Math.max(50, Math.floor(p.nSims / 3));
-  const raw   = fn(p.sEntry, p.sResPct, p.bucketsKey, nSimsOpt);
+  const fsMin = parseFloat($('opt-fs-min').value) || 75;
+  const fsMax = parseFloat($('opt-fs-max').value) || 250;
+  const niMin = parseInt($('opt-ni-min').value)   || 10;
+  const niMax = parseInt($('opt-ni-max').value)   || 70;
+  const raw   = fn(p.sEntry, p.sResPct, p.bucketsKey, nSimsOpt, fsMin, fsMax, niMin, niMax);
   const d     = JSON.parse(raw);
 
   // Optimal config card
@@ -907,6 +983,7 @@ async function init() {
     $('app').classList.add('visible');
 
     isReady = true;
+    syncCheckRange();
     const p = getParams();
     updateLabelsAndHint(p);
     triggerRun('overview');

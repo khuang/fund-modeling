@@ -658,7 +658,8 @@ def _plot_pareto(rows, best, fund_sizes):
     return _fig_to_b64(fig)
 
 
-def get_optimizer(entry_val, reserve_pct, buckets_key, n_sims):
+def get_optimizer(entry_val, reserve_pct, buckets_key, n_sims,
+                  fs_min=75, fs_max=250, ni_min=10, ni_max=70):
     """Grid search over fund_size × n_investments.
 
     Check range is derived from avg_check (min = 0.5×, max = 2×) so the
@@ -666,8 +667,13 @@ def get_optimizer(entry_val, reserve_pct, buckets_key, n_sims):
     Score = 0.6 × median_irr + 0.4 × P10_irr  (risk-adjusted return).
     Returns JSON with best config, full results table, and two charts.
     """
-    FUND_SIZES = [75, 100, 125, 150, 175, 200, 250]
-    N_INV_LIST = [10, 15, 20, 27, 35, 50, 70]
+    fs_min = max(25,  int(fs_min)); fs_max = max(fs_min + 25, int(fs_max))
+    ni_min = max(5,   int(ni_min)); ni_max = max(ni_min + 1,  int(ni_max))
+
+    FUND_SIZES = sorted(set(int(round(v / 25) * 25)
+                            for v in np.linspace(fs_min, fs_max, 7)))
+    N_INV_LIST = sorted(set(max(5, int(round(v)))
+                            for v in np.geomspace(ni_min, ni_max, 7)))
 
     bkts     = BASE_BUCKETS if buckets_key == 'base' else BEAR_BUCKETS
     n_sims   = int(n_sims)
